@@ -1,3 +1,4 @@
+
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
@@ -13,6 +14,11 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Full-height but not huge multiple viewports */
+html, body, #root {
+  height: 100%;
+}
+
 a {
   font-weight: 500;
   color: #111112;
@@ -22,15 +28,29 @@ a:hover {
   color: #535bf2;
 }
 
+/* IMPORTANT: use 100vh not 400vh */
 body {
   margin: 0;
   min-width: 320px;
-  min-height: 400vh;
+  min-height: 100vh; /* <<< changed from 400vh */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* optional safe fallback to prevent horizontal overflow while you debug */
+  overflow-x: hidden;
 }
 
+/* ensure root container doesn't force extra width/height */
 #root {
   width: 100%;
   min-height: 100vh;
+}
+
+/* responsive media */
+img, video, svg {
+  max-width: 100%;
+  height: auto;
+  display: block;
 }
 
 h1 {
@@ -68,4 +88,8 @@ button:focus-visible {
   button {
     background-color: #121010;
   }
+}
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
