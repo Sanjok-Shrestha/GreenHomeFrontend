@@ -52,36 +52,53 @@ const LoginPage: React.FC = () => {
     setErrorMessage(null);
 
     try {
-      const res = await api.post<LoginResponse>("/api/auth/login", formData, {
+      const res = await api.post<LoginResponse>("/auth/login", formData, {
         headers: { "Content-Type": "application/json" },
       });
 
       const token = res.data?.token;
-      const user = res.data?.user ?? {};
+      const userFromResponse = res.data?.user ?? {};
+      let role = (res.data?.role || userFromResponse.role || "") as string;
 
-      let role = (res.data?.role || user.role || "") as string;
       if (!role && token) {
         const payload = decodeJwt(token);
         role = payload?.role || payload?.data?.role || "";
       }
-      role = (role || "user").toString().trim().toLowerCase();
 
       if (token) {
         localStorage.setItem("token", token);
         localStorage.setItem("accessToken", token);
+        api.defaults.headers.common.Authorization = `Bearer ${token}`;
       }
-      localStorage.setItem("user", JSON.stringify(user));
+
+      // Fetch canonical profile if available
+      let profile: any = userFromResponse;
+      try {
+        const profRes = await api.get("/users/profile");
+        profile = profRes.data ?? profile;
+      } catch (fetchErr) {
+        console.warn("Could not fetch profile after login:", fetchErr);
+      }
+
+      role = (role || profile?.role || "").toString().trim().toLowerCase();
+      if (!role) role = "user";
+
+      localStorage.setItem("user", JSON.stringify(profile || {}));
       localStorage.setItem("role", role);
 
       try {
         setAuthState?.({ isAuth: true, roleState: role });
+        console.log("LOGIN: setAuthState ->", { isAuth: true, roleState: role });
       } catch {
-        // ignore if context not present
+        // ignore
       }
 
-      if (role === "admin") navigate("/admin", { replace: true });
-      else if (role === "collector") navigate("/collector", { replace: true });
-      else navigate("/dashboard", { replace: true });
+      // Wait a tick so App picks up the new authState then navigate to canonical routes.
+      setTimeout(() => {
+        if (role === "admin") navigate("/admin", { replace: true });
+        else if (role === "collector") navigate("/collector/dashboard", { replace: true });
+        else navigate("/dashboard", { replace: true });
+      }, 75);
     } catch (error: any) {
       console.error("Login error:", error);
       if (error.response) {
@@ -158,9 +175,7 @@ const LoginPage: React.FC = () => {
             </button>
           </form>
 
-          {errorMessage && (
-            <div style={{ marginTop: 12, color: "#c0392b" }}>{errorMessage}</div>
-          )}
+          {errorMessage && <div style={{ marginTop: 12, color: "#c0392b" }}>{errorMessage}</div>}
 
           <p style={styles.registerText}>
             Don't have an account?{" "}
@@ -176,7 +191,7 @@ const LoginPage: React.FC = () => {
 
 export default LoginPage;
 
-/* Styles (matches Register look & feel) */
+/* Styles (unchanged) */
 const styles: { [k: string]: React.CSSProperties } = {
   page: {
     display: "flex",
@@ -232,7 +247,7 @@ const styles: { [k: string]: React.CSSProperties } = {
     outline: "none",
     fontSize: 14,
     boxSizing: "border-box",
-    color: "#000", // changed to black so typed text is visible
+    color: "#000",
   },
 
   passwordWrap: { position: "relative", marginBottom: 12 },
@@ -246,7 +261,7 @@ const styles: { [k: string]: React.CSSProperties } = {
     outline: "none",
     fontSize: 14,
     boxSizing: "border-box",
-    color: "#000", // black typed text for password field
+    color: "#000",
   },
   passwordToggle: {
     position: "absolute",

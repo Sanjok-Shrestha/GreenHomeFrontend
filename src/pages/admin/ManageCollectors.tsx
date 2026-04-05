@@ -1,180 +1,302 @@
+// src/pages/admin/ManageCollectors.tsx
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import api from "../../api";
 import type { AxiosResponse } from "axios";
+import AdminSidebar from "../../components/AdminSidebar";
+import "./ManageCollectors.css";
 
+/* ── Types ── */
 type Collector = {
-  _id: string;
-  name?: string;
-  email?: string;
-  phone?: string;
-  active?: boolean;     // used to indicate approved / enabled
-  status?: string;      // optional backend-provided status (e.g. 'pending'|'approved'|'rejected')
-  createdAt?: string;
-  earnings?: number;
+  id?: string; _id: string; name?: string; email?: string; phone?: string;
+  active?: boolean; status?: string; createdAt?: string; points?: number; isApproved?: boolean;
 };
+type Toast = { text: string; kind?: "info" | "success" | "danger" };
 
+/* ── StatusBadge ── */
+function StatusBadge({ status }: { status?: string }) {
+  const s = (status ?? "pending").toLowerCase();
+  const map: Record<string, { label: string; cls: string }> = {
+    pending:  { label: "Pending",  cls: "mc-badge--pending"  },
+    applied:  { label: "Pending",  cls: "mc-badge--pending"  },
+    approved: { label: "Approved", cls: "mc-badge--approved" },
+    active:   { label: "Active",   cls: "mc-badge--approved" },
+    rejected: { label: "Rejected", cls: "mc-badge--rejected" },
+    disabled: { label: "Disabled", cls: "mc-badge--disabled" },
+  };
+  const { label, cls } = map[s] ?? { label: status ?? "Unknown", cls: "mc-badge--disabled" };
+  return <span className={`mc-badge ${cls}`}>{label}</span>;
+}
+
+/* ── Normalizer ── */
+function normalizeCollector(d: Partial<any>): Collector {
+  const id        = String((d as any).id ?? d._id ?? "");
+  const activeFlag= typeof d.active === "boolean" ? d.active : !!d.isApproved;
+  const statusRaw = (d.status ?? (activeFlag ? "approved" : "pending")) as string;
+  return {
+    id, _id: id,
+    name:      String(d.name  ?? ""),
+    email:     String(d.email ?? ""),
+    phone:     String(d.phone ?? ""),
+    points:    Number(d.points ?? 0),
+    createdAt: d.createdAt ?? (d as any).created_at ?? undefined,
+    active:    Boolean(activeFlag),
+    status:    statusRaw.toLowerCase(),
+    isApproved:Boolean(d.isApproved ?? (statusRaw.toLowerCase() === "approved")),
+  };
+}
+
+/* ── Component ── */
 export default function ManageCollectors() {
-  const [collectors, setCollectors] = useState<Collector[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [pendingOnly, setPendingOnly] = useState(false);
+  const location = useLocation();
+
+  const [collectors,     setCollectors]     = useState<Collector[]>([]);
+  const [loading,        setLoading]        = useState(true);
+  const [error,          setError]          = useState<string | null>(null);
+  const [pendingOnly,    setPendingOnly]    = useState(false);
+  const [search,         setSearch]         = useState("");
+  const [mutationLoading,setMutationLoading]= useState(false);
+  const [mutationId,     setMutationId]     = useState<string | null>(null);
+  const [toast,          setToast]          = useState<Toast | null>(null);
+
+  const showToast = (text: string, kind: Toast["kind"] = "info", ttl = 3000) => {
+    setToast({ text, kind });
+    setTimeout(() => setToast(null), ttl);
+  };
 
   useEffect(() => {
-    load();
+    const params = new URLSearchParams(location.search);
+    if (params.get("filter") === "pending") setPendingOnly(true);
   }, []);
 
-  async function load() {
-    setLoading(true);
-    setError(null);
+  useEffect(() => { load(); }, [pendingOnly]);
+
+  async function load(pendingOverride?: boolean) {
+    setLoading(true); setError(null);
     try {
-      const res: AxiosResponse<Collector[] | { data: Collector[] }> = await api.get("/api/admin/collectors");
-      const data: Collector[] = Array.isArray(res.data) ? res.data : res.data?.data ?? [];
-      setCollectors(data);
+      const usePending = typeof pendingOverride === "boolean" ? pendingOverride : pendingOnly;
+      const res: AxiosResponse<any> = await api.get("/admin/collectors", {
+        params: { _t: Date.now(), filter: usePending ? "pending" : undefined },
+      });
+      const raw: any[] = Array.isArray(res.data) ? res.data : (res.data as any)?.data ?? [];
+      setCollectors(raw.map((d) => normalizeCollector(d)));
     } catch (err: any) {
-      console.error("Failed to load collectors", err);
-      setError(err?.response?.data?.message || "Failed to load collectors");
-    } finally {
-      setLoading(false);
-    }
+      setError(err?.response?.data?.message || String(err?.message || "Failed to load collectors"));
+    } finally { setLoading(false); }
   }
 
-  // Existing toggle - keeps backward compatibility with your code
+  function updateCollectorInState(updated: Collector) {
+    const uid    = String(updated._id);
+    const status = (updated.status ?? (updated.active ? "approved" : "pending")).toLowerCase();
+    setCollectors((prev) => {
+      if (pendingOnly && status !== "pending" && status !== "applied")
+        return prev.filter((c) => String(c._id) !== uid);
+      let found = false;
+      const next = prev.map((c) => { if (String(c._id) === uid) { found = true; return { ...c, ...updated }; } return c; });
+      if (!found) next.unshift({ ...updated });
+      return next;
+    });
+  }
+
   async function toggleActive(id: string, current?: boolean) {
+    setMutationLoading(true); setMutationId(id);
     try {
-      await api.patch(`/api/admin/collectors/${id}/active`, { active: !current });
-      setCollectors((s) => s.map((c) => (c._id === id ? { ...c, active: !current, status: !current ? "approved" : c.status } : c)));
+      const res = await api.patch(`/admin/collectors/${id}/active`, { active: !current });
+      const ret = res.data?.collector ?? null;
+      if (ret) updateCollectorInState(normalizeCollector(ret));
+      else setCollectors((prev) => prev.map((c) => c._id === id ? { ...c, active: !current, status: !current ? "approved" : "disabled" } : c));
+      await load();
+      showToast("Collector updated", "success");
     } catch (err: any) {
-      alert(err?.response?.data?.message || "Failed to update collector");
-    }
+      showToast(err?.response?.data?.message || "Failed to update collector", "danger");
+    } finally { setMutationLoading(false); setMutationId(null); }
   }
 
-  // Approve flow: prefer a dedicated approve endpoint; fallback to toggleActive
   async function approveCollector(id: string) {
     if (!confirm("Approve this collector?")) return;
+    setMutationLoading(true); setMutationId(id);
     try {
-      // Preferred: call dedicated endpoint if backend provides it
-      await api.post(`/api/admin/collectors/${id}/approve`);
-      setCollectors((s) => s.map((c) => (c._id === id ? { ...c, active: true, status: "approved" } : c)));
-    } catch (err) {
-      // fallback to toggling active flag if approve endpoint not present
-      await toggleActive(id, false);
-    }
+      const res = await api.post(`/admin/collectors/${id}/approve`);
+      const ret = res.data?.collector ?? null;
+      if (ret) updateCollectorInState(normalizeCollector(ret));
+      else updateCollectorInState({ _id: id, status: "approved", active: true, name: "", email: "", phone: "" } as Collector);
+      await load();
+      showToast("Collector approved", "success");
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || "Failed to approve collector", "danger");
+    } finally { setMutationLoading(false); setMutationId(null); }
   }
 
-  // Reject flow: prefer a dedicated reject endpoint (keeps record), or delete as fallback
   async function rejectCollector(id: string) {
-    if (!confirm("Reject this collector registration? This may remove their registration.")) return;
+    if (!confirm("Reject this collector registration?")) return;
+    setMutationLoading(true); setMutationId(id);
     try {
-      // Preferred: backend route to mark as rejected
-      await api.post(`/api/admin/collectors/${id}/reject`);
-      setCollectors((s) => s.map((c) => (c._id === id ? { ...c, active: false, status: "rejected" } : c)));
-    } catch (err) {
-      // fallback: delete the record if no reject endpoint exists
-      try {
-        await api.delete(`/api/admin/collectors/${id}`);
-        setCollectors((s) => s.filter((c) => c._id !== id));
-      } catch (delErr: any) {
-        alert(delErr?.response?.data?.message || "Failed to reject/delete collector");
+      const res = await api.post(`/admin/collectors/${id}/reject`);
+      const ret = res.data?.collector ?? null;
+      if (ret) { updateCollectorInState(normalizeCollector(ret)); showToast("Collector rejected", "info"); }
+      else {
+        try { await api.delete(`/admin/collectors/${id}`); setCollectors((p) => p.filter((c) => c._id !== id)); showToast("Collector removed", "info"); }
+        catch (delErr: any) { showToast(delErr?.response?.data?.message || "Failed to reject/delete", "danger"); }
       }
-    }
+      await load();
+    } catch (err: any) {
+      try { await api.delete(`/admin/collectors/${id}`); setCollectors((p) => p.filter((c) => c._id !== id)); showToast("Collector removed", "info"); }
+      catch (delErr: any) { showToast(delErr?.response?.data?.message || "Failed to reject/delete", "danger"); }
+    } finally { setMutationLoading(false); setMutationId(null); }
   }
 
-  function viewEarnings(id: string) {
-    window.open(`/admin/collector/${id}/earnings`, "_blank");
-  }
+  const pendingCount  = collectors.filter((c) => { const s = (c.status ?? "").toLowerCase(); return s === "pending" || s === "applied"; }).length;
+  const approvedCount = collectors.filter((c) => (c.status ?? "").toLowerCase() === "approved").length;
 
-  const visible = pendingOnly ? collectors.filter((c) => {
-    // detect pending: prefer explicit status field, else active === false and created recently
-    if (typeof c.status === "string") return c.status === "pending" || c.status === "applied";
-    return !c.active;
-  }) : collectors;
+  const visible = collectors
+    .filter((c) => {
+      if (pendingOnly) { const s = (c.status ?? "").toLowerCase(); return s === "pending" || s === "applied"; }
+      return true;
+    })
+    .filter((c) => {
+      if (!search.trim()) return true;
+      const q = search.toLowerCase();
+      return [c.name, c.email, c.phone].some((v) => (v ?? "").toLowerCase().includes(q));
+    });
 
   return (
-    <div style={{ padding: 20, maxWidth: 1100, margin: "0 auto" }}>
-      <h2>Manage Collectors</h2>
+    <div className="admin-page">
+      <AdminSidebar />
 
-      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
-        <button onClick={load} style={button}>Refresh</button>
+      <main className="admin-main">
+        <div className="mc-page">
 
-        <label style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-          <input type="checkbox" checked={pendingOnly} onChange={(e) => setPendingOnly(e.target.checked)} />
-          Show pending only
-        </label>
-      </div>
+          {/* ── Header ── */}
+          <div className="mc-header">
+            <div>
+              <h2 className="mc-title">Manage Collectors</h2>
+              <div className="mc-sub">
+                {loading ? "Loading…" : `${visible.length} of ${collectors.length} collector${collectors.length !== 1 ? "s" : ""}`}
+              </div>
+            </div>
+            <div className="mc-header__chips">
+              {pendingCount > 0 && <span className="mc-chip mc-chip--warning">⏳ {pendingCount} pending</span>}
+              <span className="mc-chip mc-chip--success">✓ {approvedCount} approved</span>
+            </div>
+          </div>
 
-      {loading ? (
-        <div>Loading…</div>
-      ) : error ? (
-        <div style={{ color: "crimson" }}>{error}</div>
-      ) : (
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th style={th}>Name</th>
-              <th style={th}>Email</th>
-              <th style={th}>Phone</th>
-              <th style={th}>Earnings</th>
-              <th style={th}>Joined</th>
-              <th style={th}>Status</th>
-              <th style={th}>Actions</th>
-            </tr>
-          </thead>
+          {/* ── Toolbar ── */}
+          <div className="mc-toolbar">
+            <input
+              className="mc-search"
+              placeholder="Search name, email or phone…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              aria-label="Search collectors"
+            />
+            <button
+              type="button"
+              className="mc-btn mc-btn--primary"
+              onClick={() => load()}
+              disabled={loading || mutationLoading}
+            >
+              ↻ Refresh
+            </button>
+            <label className="mc-toggle">
+              <input
+                type="checkbox"
+                checked={pendingOnly}
+                onChange={(e) => setPendingOnly(e.target.checked)}
+                disabled={loading || mutationLoading}
+              />
+              Pending only
+            </label>
+            {mutationLoading && <span className="mc-processing">Processing…</span>}
+          </div>
 
-          <tbody>
-            {visible.map((c) => {
-              const status = c.status ?? (c.active ? "approved" : "pending");
-              return (
-                <tr key={c._id}>
-                  <td style={td}>{c.name}</td>
-                  <td style={td}>{c.email}</td>
-                  <td style={td}>{c.phone}</td>
-                  <td style={td}>Rs {c.earnings ?? 0}</td>
-                  <td style={td}>{c.createdAt ? new Date(c.createdAt).toLocaleString() : ""}</td>
-                  <td style={td}>
-                    <StatusPill status={status} />
-                  </td>
-                  <td style={td}>
-                    {/* If pending, show Approve / Reject. Otherwise allow Enable/Disable and Earnings */}
-                    {status === "pending" || status === "applied" ? (
-                      <>
-                        <button onClick={() => approveCollector(c._id)} style={smallBtn}>Approve</button>{" "}
-                        <button onClick={() => rejectCollector(c._id)} style={smallBtnAlt}>Reject</button>
-                      </>
-                    ) : (
-                      <>
-                        <button onClick={() => toggleActive(c._id, c.active)} style={smallBtn}>{c.active ? "Disable" : "Enable"}</button>{" "}
-                        <button onClick={() => viewEarnings(c._id)} style={smallBtnAlt}>Earnings</button>
-                      </>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
+          {/* ── Error ── */}
+          {error && (
+            <div className="mc-error">
+              ⚠ {error}
+              <button className="mc-btn mc-btn--sm" onClick={() => load()} style={{ marginLeft: 8 }}>Retry</button>
+            </div>
+          )}
+
+          {/* ── Loading ── */}
+          {loading && <div className="mc-loading">Loading collectors…</div>}
+
+          {/* ── Table ── */}
+          {!loading && !error && (
+            <div className="mc-table-wrap">
+              <table className="mc-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th>Points</th>
+                    <th>Joined</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visible.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="mc-empty">
+                        {pendingOnly ? "No pending collectors." : "No collectors found."}
+                      </td>
+                    </tr>
+                  ) : visible.map((c) => {
+                    const status    = (c.status ?? (c.active ? "approved" : "pending")).toLowerCase();
+                    const isPending = status === "pending" || status === "applied";
+                    const isBusy    = mutationId === c._id && mutationLoading;
+                    return (
+                      <tr key={c._id} className={isBusy ? "mc-row--busy" : ""}>
+                        <td><span className="mc-name">{c.name || "—"}</span></td>
+                        <td><span className="mc-mono">{c.email || "—"}</span></td>
+                        <td><span className="mc-mono">{c.phone || "—"}</span></td>
+                        <td><span className="mc-points">{c.points ?? 0}</span></td>
+                        <td><span className="mc-mono">{c.createdAt ? new Date(c.createdAt).toLocaleDateString() : "—"}</span></td>
+                        <td><StatusBadge status={status} /></td>
+                        <td>
+                          <div className="mc-actions">
+                            {isPending ? (
+                              <>
+                                <button type="button" className="mc-btn mc-btn--approve mc-btn--sm"
+                                  onClick={() => approveCollector(c._id)} disabled={mutationLoading}>
+                                  {isBusy ? "Approving…" : "✓ Approve"}
+                                </button>
+                                <button type="button" className="mc-btn mc-btn--danger mc-btn--sm"
+                                  onClick={() => rejectCollector(c._id)} disabled={mutationLoading}>
+                                  {isBusy ? "Rejecting…" : "✕ Reject"}
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button type="button" className="mc-btn mc-btn--ghost mc-btn--sm"
+                                  onClick={() => toggleActive(c._id, c.active)} disabled={mutationLoading}>
+                                  {isBusy ? (c.active ? "Disabling…" : "Enabling…") : (c.active ? "Disable" : "Enable")}
+                                </button>
+                                <button type="button" className="mc-btn mc-btn--sm"
+                                  onClick={() => window.open(`/admin/collector/${c._id}`, "_blank")}>
+                                  View ↗
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* ── Toast ── */}
+          {toast && (
+            <div className="mc-toast" role="status" aria-live="polite">
+              <div className={`mc-toast__inner mc-toast__inner--${toast.kind ?? "info"}`}>{toast.text}</div>
+            </div>
+          )}
+        </div>
+      </main>
     </div>
   );
 }
-
-/* small presentational StatusPill */
-function StatusPill({ status }: { status?: string }) {
-  const s = (status || "pending").toLowerCase();
-  const map: Record<string, { label: string; bg: string; color?: string }> = {
-    pending: { label: "Pending", bg: "#fff7e6", color: "#a65f00" },
-    applied: { label: "Pending", bg: "#fff7e6", color: "#a65f00" },
-    approved: { label: "Active", bg: "#e9f9ee", color: "#0b7a3f" },
-    active: { label: "Active", bg: "#e9f9ee", color: "#0b7a3f" },
-    rejected: { label: "Rejected", bg: "#fff1f1", color: "#a33" },
-    disabled: { label: "Disabled", bg: "#f6f6f6", color: "#666" },
-  };
-  const meta = map[s] ?? { label: status ?? "Unknown", bg: "#f6f6f6", color: "#333" };
-  return <div style={{ padding: "6px 10px", borderRadius: 999, background: meta.bg, color: meta.color, display: "inline-block", fontWeight: 700, fontSize: 12 }}>{meta.label}</div>;
-}
-
-/* styles */
-const button: React.CSSProperties = { padding: "8px 12px", borderRadius: 6, background: "#0b6efd", color: "#fff", border: "none" };
-const smallBtn: React.CSSProperties = { padding: "6px 8px", borderRadius: 6, border: "none", background: "#2c3e50", color: "#fff" };
-const smallBtnAlt: React.CSSProperties = { padding: "6px 8px", borderRadius: 6, border: "none", background: "#f1f1f1" };
-const th: React.CSSProperties = { textAlign: "left", padding: "10px 12px", borderBottom: "1px solid #eee" };
-const td: React.CSSProperties = { padding: "10px 12px", borderBottom: "1px solid #f5f5f5" };

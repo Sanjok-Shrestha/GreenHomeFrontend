@@ -1,92 +1,150 @@
-import React, { useContext } from "react";
+import React, { useContext, type JSX } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../App";
 
-export default function Sidebar({ active }: { active?: string }) {
+/**
+ * Sidebar component (updated to match Certificates layout)
+ * - width/min-width = 264px
+ * - sticky/full-height so it lines up with ct-page
+ */
+
+const sidebarCss = `
+/* Sidebar styles (moved from Dashboard) */
+.db-sidebar {
+  width: 264px;
+  min-width: 264px;
+  background-color: #2c3e50;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 0;
+  box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+  box-sizing: border-box;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.db-logo {
+  padding: 0 20px 30px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.db-logo-text {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.db-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px 12px;
+  flex: 1;
+  box-sizing: border-box;
+}
+
+.db-nav-item {
+  background: transparent;
+  border: none;
+  color: #fff;
+  padding: 12px 16px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 500;
+  transition: background-color 0.18s ease, transform 0.12s ease;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.db-nav-item:hover {
+  background-color: #34495e;
+  transform: translateY(-1px);
+}
+
+.db-nav-item--active {
+  background-color: #34495e;
+  font-weight: 700;
+}
+
+.db-nav-item--logout {
+  background: #e74c3c;
+  border: none;
+  color: #fff;
+  padding: 14px 18px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  margin-top: auto;
+  transition: background-color 0.18s ease, transform 0.12s ease;
+  width: 100%;
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+.db-nav-item--logout:hover {
+  background-color: #c0392b;
+  transform: translateY(-1px);
+}
+
+/* Responsive: hide on small screens (same behavior as Certificates sidebar) */
+@media (max-width:980px) {
+  .db-sidebar { display: none; }
+}
+`;
+
+export default function Sidebar(): JSX.Element {
   const navigate = useNavigate();
-  const auth = useContext(AuthContext);
-  const userRaw = localStorage.getItem("user");
-  let userName: string | null = null;
-  try {
-    userName = userRaw ? JSON.parse(userRaw).name ?? null : null;
-  } catch {
-    userName = null;
-  }
+  const { setAuthState } = useContext(AuthContext);
 
   const handleLogout = () => {
     localStorage.removeItem("accessToken");
-    localStorage.removeItem("token");
     localStorage.removeItem("user");
+    localStorage.removeItem("token");
     localStorage.removeItem("role");
-    try {
-      auth?.setAuthState?.({ isAuth: false, roleState: "" });
-    } catch {}
+    try { setAuthState({ isAuth: false, roleState: "" }); } catch {}
     navigate("/login", { replace: true });
   };
 
+  // You can replace these buttons with NavLink to get active link styling via router if desired.
   return (
-    <aside style={styles.sidebar}>
-      <div style={styles.logo}>
-        <h2 style={styles.logoText}>GreenHome</h2>
-        {userName && <div style={styles.logoSub}>{userName}</div>}
+    <>
+      <style>{sidebarCss}</style>
+      <div className="db-sidebar sidebar-root" role="navigation" aria-label="Main navigation">
+        <div className="db-logo">
+          <h2 className="db-logo-text">🏡 GreenHome</h2>
+        </div>
+
+        <nav className="db-nav" aria-label="Dashboard navigation">
+          <button className="db-nav-item db-nav-item--active" onClick={() => navigate("/dashboard")}>
+            <span aria-hidden>📊</span> Dashboard
+          </button>
+          <button className="db-nav-item" onClick={() => navigate("/pickups")}>
+            <span aria-hidden>🚚</span> Pickup Status
+          </button>
+          <button className="db-nav-item" onClick={() => navigate("/rewards")}>
+            <span aria-hidden>🎁</span> Rewards
+          </button>
+          <button className="db-nav-item" onClick={() => navigate("/certificates")}>
+            <span aria-hidden>📜</span> Certificates
+          </button>
+          <button className="db-nav-item" onClick={() => navigate("/profile")}>
+            <span aria-hidden>👤</span> Profile
+          </button>
+
+          <button className="db-nav-item--logout" onClick={handleLogout}>
+            <span aria-hidden>🚪</span> Logout
+          </button>
+        </nav>
       </div>
-
-      <nav style={styles.nav}>
-        <button style={{ ...styles.navItem, ...(active === "dashboard" ? styles.navItemActive : {}) }} onClick={() => navigate("/dashboard")}>Dashboard</button>
-        <button style={{ ...styles.navItem, ...(active === "post-waste" ? styles.navItemActive : {}) }} onClick={() => navigate("/post-waste")}>Post Waste</button>
-        <button style={{ ...styles.navItem, ...(active === "pickups" ? styles.navItemActive : {}) }} onClick={() => navigate("/pickups")}>Pickup Status</button>
-        <button style={{ ...styles.navItem, ...(active === "rewards" ? styles.navItemActive : {}) }} onClick={() => navigate("/rewards")}>Rewards</button>
-        <button style={{ ...styles.navItem, ...(active === "profile" ? styles.navItemActive : {}) }} onClick={() => navigate("/profile")}>Profile</button>
-
-        <button style={styles.navItemLogout} onClick={handleLogout}>Logout</button>
-      </nav>
-    </aside>
+    </>
   );
 }
-
-const styles: { [k: string]: React.CSSProperties } = {
-  sidebar: {
-    width: 260,
-    backgroundColor: "#2c3e50",
-    color: "white",
-    display: "flex",
-    flexDirection: "column",
-    padding: "20px 0",
-    boxShadow: "2px 0 10px rgba(0,0,0,0.1)",
-    boxSizing: "border-box",
-  },
-  logo: {
-    padding: "0 20px 20px",
-    borderBottom: "1px solid rgba(255,255,255,0.06)",
-    marginBottom: 6,
-  },
-  logoText: { margin: 0, fontSize: 20, fontWeight: 700 },
-  logoSub: { marginTop: 6, fontSize: 13, color: "rgba(255,255,255,0.85)" },
-
-  nav: { display: "flex", flexDirection: "column", gap: 6, padding: "14px 12px", flex: 1 },
-  navItem: {
-    background: "transparent",
-    border: "none",
-    color: "white",
-    padding: "12px 14px",
-    textAlign: "left",
-    cursor: "pointer",
-    borderRadius: 8,
-    fontSize: 15,
-    transition: "all 0.2s ease",
-    fontWeight: 500,
-  },
-  navItemActive: { backgroundColor: "#34495e" },
-  navItemLogout: {
-    background: "#e74c3c",
-    border: "none",
-    color: "white",
-    padding: "12px 14px",
-    textAlign: "left",
-    cursor: "pointer",
-    borderRadius: 8,
-    fontSize: 15,
-    marginTop: "auto",
-    fontWeight: 700,
-  },
-};

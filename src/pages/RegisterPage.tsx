@@ -44,7 +44,12 @@ export default function RegisterPage(): JSX.Element {
 
     setLoading(true);
     try {
-      await api.post("/api/auth/register", formData);
+      // NOTE: src/api.js already sets baseURL to include "/api"
+      // so we call the endpoint without the extra "/api" prefix.
+      // Optional debug:
+      // console.log("api.baseURL =", api.defaults.baseURL);
+
+      await api.post("/auth/register", formData);
       navigate("/login");
     } catch (err: any) {
       setError(err?.response?.data?.message || "Registration failed");

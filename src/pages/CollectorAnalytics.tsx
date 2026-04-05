@@ -1,40 +1,13 @@
-import React, { useEffect, useMemo, useState } from "react";
+// src/pages/CollectorAnalytics.tsx
+import React, { useCallback, useEffect, useMemo, useRef, useState, type JSX } from "react";
 import api from "../api";
 import { useNavigate } from "react-router-dom";
+import CollectorSidebar from "../components/CollectorSidebar";
+import "./CollectorAnalytics.css";
 
-/**
- * CollectorAnalytics.tsx
- *
- * Lightweight analytics page for collectors.
- * - Fetches analytics from GET /api/collector/analytics
- * - Renders KPI cards, a pickups line chart, a kg-collected bar chart, status breakdown, and top zones table
- *
- * Expected backend response (example shape):
- * {
- *   kpis: { assigned: number, completedMonth: number, kgCollected: number, earnings: number },
- *   series: [{ date: "2026-03-01", pickups: 4, kg: 120, earnings: 450 }, ...], // daily or weekly
- *   statusCounts: { pending: 3, scheduled: 5, picked: 2, collected: 10 },
- *   topZones: [{ zone: "Tokha", pickups: 12, kg: 340 }, ...],
- *   avgPickupTimeMinutes: 18.5
- * }
- *
- * If your API uses a different path or shape, adjust the fetch and typings below.
- */
-
-type KPI = {
-  assigned: number;
-  completedMonth: number;
-  kgCollected: number;
-  earnings: number;
-};
-
-type SeriesPoint = {
-  date: string; // ISO date or label
-  pickups: number;
-  kg: number;
-  earnings?: number;
-};
-
+/* ── Types ── */
+type KPI             = { assigned: number; completedMonth: number; kgCollected: number; points: number };
+type SeriesPoint     = { date: string; pickups: number; kg: number; points?: number };
 type AnalyticsResponse = {
   kpis: KPI;
   series: SeriesPoint[];
@@ -43,302 +16,319 @@ type AnalyticsResponse = {
   avgPickupTimeMinutes?: number;
 };
 
+/* ── Helpers ── */
 function formatNumber(n: number) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  if (n >= 1_000)     return `${(n / 1_000).toFixed(1)}k`;
   return String(n);
 }
 
-/* Simple SVG line chart (no deps) */
+/* ── SVG Line Chart ── */
 function LineChart({
-  data,
-  width = 680,
-  height = 120,
-  color = "#2c9f4a",
-  valueKey = "pickups",
+  data, height = 140, color = "#1a8a3c", valueKey = "pickups",
 }: {
-  data: SeriesPoint[];
-  width?: number;
-  height?: number;
-  color?: string;
-  valueKey?: "pickups" | "kg" | "earnings";
+  data: SeriesPoint[]; height?: number; color?: string; valueKey?: "pickups" | "kg" | "points";
 }) {
   if (!data || data.length === 0) return <div style={{ height }} />;
 
-  const values = data.map((d) => d[valueKey] ?? 0);
-  const max = Math.max(...values, 1);
-  const min = Math.min(...values, 0);
-  const pad = 6;
+  const values = data.map((d) => Number((d as any)[valueKey] ?? 0));
+  const max    = Math.max(...values, 1);
+  const min    = Math.min(...values, 0);
+  const pad    = 8;
+  const width  = Math.max(240, data.length * 36);
   const innerW = width - pad * 2;
   const innerH = height - pad * 2;
-  const stepX = innerW / Math.max(1, data.length - 1);
+  const stepX  = innerW / Math.max(1, data.length - 1);
 
-  const points = values.map((v, i) => {
-    const x = pad + i * stepX;
-    const y = pad + innerH - ((v - min) / (max - min || 1)) * innerH;
-    return `${x},${y}`;
-  });
+  const pts = values.map((v, i) => ({
+    x: pad + i * stepX,
+    y: pad + innerH - ((v - min) / (max - min || 1)) * innerH,
+  }));
 
-  const areaPath = `M ${pad},${pad + innerH} L ${points.join(" L ")} L ${pad + innerW},${pad + innerH} Z`;
+  const polyline = pts.map((p) => `${p.x},${p.y}`).join(" ");
+  const area = `M ${pad},${pad + innerH} L ${pts.map((p) => `${p.x},${p.y}`).join(" L ")} L ${pad + innerW},${pad + innerH} Z`;
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} preserveAspectRatio="none" role="img" aria-label="Trend chart">
-      <defs>
-        <linearGradient id="grad" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.18" />
-          <stop offset="100%" stopColor={color} stopOpacity="0.03" />
-        </linearGradient>
-      </defs>
-
-      {/* area */}
-      <path d={areaPath} fill="url(#grad)" stroke="none" />
-
-      {/* line */}
-      <polyline fill="none" stroke={color} strokeWidth={2.2} points={points.join(" ")} strokeLinecap="round" strokeLinejoin="round" />
-
-      {/* points */}
-      {points.map((pt, i) => {
-        const [x, y] = pt.split(",").map(Number);
-        return <circle key={i} cx={x} cy={y} r={i === data.length - 1 ? 3.8 : 2.6} fill={color} opacity={i === data.length - 1 ? 1 : 0.9} />;
-      })}
-    </svg>
-  );
-}
-
-/* Simple horizontal bar chart for top zones (kg) */
-function Bars({
-  items,
-  maxW = 320,
-}: {
-  items: { label: string; value: number }[];
-  maxW?: number;
-}) {
-  if (!items || items.length === 0) return <div style={{ color: "#666" }}>No data</div>;
-  const max = Math.max(...items.map((i) => i.value), 1);
-  return (
-    <div style={{ display: "grid", gap: 10 }}>
-      {items.map((it) => {
-        const w = Math.round((it.value / max) * (maxW - 60));
-        return (
-          <div key={it.label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 120, fontSize: 13, color: "#334" }}>{it.label}</div>
-            <div style={{ background: "#eef8f0", height: 12, flex: "0 0 auto", width: maxW, borderRadius: 8, overflow: "hidden" }}>
-              <div style={{ width: `${w}px`, maxWidth: "100%", height: "100%", background: "#2c9f4a" }} />
-            </div>
-            <div style={{ marginLeft: 8, minWidth: 36, textAlign: "right", color: "#334", fontWeight: 700 }}>{formatNumber(it.value)}</div>
-          </div>
-        );
-      })}
+    <div style={{ width: "100%", overflowX: "auto" }}>
+      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} preserveAspectRatio="none" role="img" aria-label="Trend chart">
+        <defs>
+          <linearGradient id="ca-grad" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%"   stopColor={color} stopOpacity="0.22" />
+            <stop offset="100%" stopColor={color} stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        <path d={area} fill="url(#ca-grad)" />
+        <polyline fill="none" stroke={color} strokeWidth="2" points={polyline} strokeLinecap="round" strokeLinejoin="round" />
+        {pts.map((p, i) => (
+          <circle key={i} cx={p.x} cy={p.y}
+            r={i === pts.length - 1 ? 4.5 : 3}
+            fill={color}
+            opacity={i === pts.length - 1 ? 1 : 0.8}
+            stroke="#fff"
+            strokeWidth={i === pts.length - 1 ? 2 : 1}
+          />
+        ))}
+      </svg>
     </div>
   );
 }
 
-export default function CollectorAnalytics() {
+/* ── Bar Chart (Top Zones) ── */
+function Bars({ items }: { items: { label: string; value: number }[] }) {
+  if (!items || items.length === 0) return <div style={{ color: "var(--text-3)", fontSize: 13 }}>No data</div>;
+  const max = Math.max(...items.map((i) => i.value), 1);
+  return (
+    <div>
+      {items.map((it) => (
+        <div key={it.label} className="ca-bar-row">
+          <div className="ca-bar-label">{it.label}</div>
+          <div className="ca-bar-track">
+            <div className="ca-bar-fill" style={{ width: `${(it.value / max) * 100}%` }} />
+          </div>
+          <div className="ca-bar-val">{formatNumber(it.value)}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ── Component ── */
+export default function CollectorAnalytics(): JSX.Element {
   const navigate = useNavigate();
-  const [data, setData] = useState<AnalyticsResponse | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const [range, setRange] = useState<"7" | "30" | "90">("30");
+
+  const [data,        setData]        = useState<AnalyticsResponse | null>(null);
+  const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState<string | null>(null);
+  const [range,       setRange]       = useState<"7" | "30" | "90">("30");
+  const [metric,      setMetric]      = useState<"pickups" | "kg" | "points">("pickups");
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [intervalSec, setIntervalSec] = useState(30);
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+  const pollRef = useRef<number | null>(null);
+
+  const load = useCallback(async (signal?: AbortSignal) => {
+    setLoading(true); setError(null);
+    try {
+      const res = await api.get<AnalyticsResponse>(`/collector/analytics?range=${range}`, { signal });
+      setData(res.data);
+      setLastUpdated(Date.now());
+    } catch (err: any) {
+      if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") return;
+      if (!err?.response) { setError("Unable to reach server. Check backend."); }
+      else if (err.response?.status === 401) {
+        ["accessToken","token","user"].forEach((k) => { try { localStorage.removeItem(k); } catch {} });
+        navigate("/login");
+        return;
+      } else {
+        setError(err.response?.data?.message || "Failed to load analytics");
+      }
+    } finally { setLoading(false); }
+  }, [range, navigate]);
 
   useEffect(() => {
-    let mounted = true;
-    setLoading(true);
-    setError(null);
+    const ctrl = new AbortController();
+    load(ctrl.signal);
+    return () => ctrl.abort();
+  }, [load, range]);
 
-    async function load() {
-      try {
-        const res = await api.get<AnalyticsResponse>(`/api/collector/analytics?range=${range}`);
-        if (!mounted) return;
-        setData(res.data);
-      } catch (err: any) {
-        console.error("Failed to load analytics", err);
-        if (!mounted) return;
-        if (!err?.response) setError("Unable to reach server. Is backend running?");
-        else setError(err.response?.data?.message || "Failed to load analytics");
-      } finally {
-        if (mounted) setLoading(false);
-      }
+  useEffect(() => {
+    if (autoRefresh) {
+      pollRef.current = window.setInterval(() => load(), Math.max(5000, intervalSec * 1000));
+      return () => { if (pollRef.current) clearInterval(pollRef.current); };
     }
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    return () => {};
+  }, [autoRefresh, intervalSec, load]);
 
-    load();
-    return () => {
-      mounted = false;
-    };
-  }, [range]);
+  const series         = data?.series ?? [];
+  const kpis           = data?.kpis ?? { assigned: 0, completedMonth: 0, kgCollected: 0, points: 0 };
+  const topZones       = useMemo(() => (data?.topZones ?? []).map((z) => ({ label: z.zone, value: z.kg })), [data]);
+  const statusBreakdown= useMemo(() => Object.entries(data?.statusCounts ?? {}).map(([k, v]) => ({ label: k, value: v })).sort((a, b) => b.value - a.value), [data]);
 
-  const series = data?.series ?? [];
+  function exportCSV(rows: string[][], filename: string) {
+    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const a   = Object.assign(document.createElement("a"), {
+      href: URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" })),
+      download: filename,
+    });
+    document.body.appendChild(a); a.click(); a.remove();
+  }
 
-  const pickupsSeries = useMemo(() => series.map((s) => ({ date: s.date, pickups: s.pickups, kg: s.kg, earnings: s.earnings })), [series]);
-
-  const topZones = (data?.topZones ?? []).map((z) => ({ label: z.zone, value: z.kg }));
+  const KPI_CARDS = [
+    { label: "Assigned",     value: formatNumber(kpis.assigned),         desc: "Currently assigned pickups"        },
+    { label: "Completed",    value: formatNumber(kpis.completedMonth),    desc: "Pickups completed in range"         },
+    { label: "Kg Collected", value: formatNumber(kpis.kgCollected),       desc: "Total kilograms collected"          },
+    { label: "Points",       value: formatNumber(kpis.points ?? 0),       desc: "Collector points (total/current)"  },
+  ];
 
   return (
-    <div style={{ padding: 20 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-        <div>
-          <h2 style={{ margin: 0 }}>Performance & Analytics</h2>
-          <div style={{ color: "#666", marginTop: 6 }}>Overview of your recent performance and pickup metrics</div>
-        </div>
+    <div className="ca-root">
+      <CollectorSidebar />
 
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => navigate(-1)} style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #ddd", background: "#fff" }}>
-            ← Back
-          </button>
+      <main className="ca-main">
 
-          <div style={{ display: "flex", gap: 6, alignItems: "center", background: "#fff", padding: 6, borderRadius: 8, border: "1px solid #eee" }}>
-            <button
-              onClick={() => setRange("7")}
-              style={{
-                padding: "6px 10px",
-                borderRadius: 6,
-                background: range === "7" ? "#2c9f4a" : "transparent",
-                color: range === "7" ? "#fff" : "#2c9f4a",
-                border: "none",
-                cursor: "pointer",
-                fontWeight: 700,
-              }}
-            >
-              7d
+        {/* ── Header ── */}
+        <div className="ca-header">
+          <div>
+            <h2 className="ca-header__title">Performance &amp; Analytics</h2>
+            <p className="ca-header__sub">Overview of your recent performance and pickup metrics</p>
+          </div>
+          <div className="ca-header__actions">
+            {lastUpdated && (
+              <span className="ca-updated">
+                updated {Math.round((Date.now() - lastUpdated) / 1000)}s ago
+              </span>
+            )}
+            <button className="ca-btn" onClick={() => load()} disabled={loading}>
+              ↻ Refresh
             </button>
-            <button
-              onClick={() => setRange("30")}
-              style={{
-                padding: "6px 10px",
-                borderRadius: 6,
-                background: range === "30" ? "#2c9f4a" : "transparent",
-                color: range === "30" ? "#fff" : "#2c9f4a",
-                border: "none",
-                cursor: "pointer",
-                fontWeight: 700,
-              }}
-            >
-              30d
-            </button>
-            <button
-              onClick={() => setRange("90")}
-              style={{
-                padding: "6px 10px",
-                borderRadius: 6,
-                background: range === "90" ? "#2c9f4a" : "transparent",
-                color: range === "90" ? "#fff" : "#2c9f4a",
-                border: "none",
-                cursor: "pointer",
-                fontWeight: 700,
-              }}
-            >
-              90d
-            </button>
+            <label className="ca-auto-pill">
+              <input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} />
+              Auto-refresh
+              {autoRefresh && (
+                <select value={intervalSec} onChange={(e) => setIntervalSec(Number(e.target.value))}>
+                  <option value={15}>15s</option>
+                  <option value={30}>30s</option>
+                  <option value={60}>60s</option>
+                </select>
+              )}
+            </label>
           </div>
         </div>
-      </div>
 
-      {loading ? (
-        <div style={{ padding: 20, color: "#666" }}>Loading analytics…</div>
-      ) : error ? (
-        <div style={{ padding: 20, color: "crimson" }}>{error}</div>
-      ) : !data ? (
-        <div style={{ padding: 20 }}>No analytics available.</div>
-      ) : (
-        <>
-          {/* KPI row */}
-          <div style={{ display: "flex", gap: 12, marginTop: 18, flexWrap: "wrap" }}>
-            <div style={{ flex: "1 1 200px", background: "#fff", padding: 16, borderRadius: 10, boxShadow: "0 8px 18px rgba(11,36,18,0.04)" }}>
-              <div style={{ color: "#666", fontSize: 13 }}>Assigned</div>
-              <div style={{ fontSize: 22, fontWeight: 800 }}>{formatNumber(data.kpis.assigned)}</div>
-              <div style={{ color: "#888", marginTop: 8 }}>Currently assigned pickups</div>
+        {/* ── Skeleton ── */}
+        {loading && (
+          <>
+            <div className="ca-kpi-grid">
+              {[0,1,2,3].map((i) => <div key={i} className="ca-skeleton" style={{ height: 96 }} />)}
+            </div>
+            <div className="ca-skeleton" style={{ height: 220 }} />
+          </>
+        )}
+
+        {/* ── Error / Empty ── */}
+        {!loading && error  && <div className="ca-error">⚠ {error}</div>}
+        {!loading && !error && !data && <div className="ca-empty">No analytics available.</div>}
+
+        {/* ── Content ── */}
+        {!loading && !error && data && (
+          <>
+            {/* KPI row */}
+            <div className="ca-kpi-grid">
+              {KPI_CARDS.map((k) => (
+                <div key={k.label} className="ca-kpi">
+                  <div className="ca-kpi__label">{k.label}</div>
+                  <div className="ca-kpi__value">{k.value}</div>
+                  <div className="ca-kpi__desc">{k.desc}</div>
+                </div>
+              ))}
             </div>
 
-            <div style={{ flex: "1 1 200px", background: "#fff", padding: 16, borderRadius: 10, boxShadow: "0 8px 18px rgba(11,36,18,0.04)" }}>
-              <div style={{ color: "#666", fontSize: 13 }}>Completed (month)</div>
-              <div style={{ fontSize: 22, fontWeight: 800 }}>{formatNumber(data.kpis.completedMonth)}</div>
-              <div style={{ color: "#888", marginTop: 8 }}>Completed pickups this month</div>
-            </div>
+            {/* Trend + aside */}
+            <div className="ca-grid">
+              <div className="ca-card">
+                <div className="ca-card__head">
+                  <div className="ca-card__title">Trend — {metric}</div>
+                  <div className="ca-card__controls">
+                    <select className="ca-select" value={metric} onChange={(e) => setMetric(e.target.value as any)}>
+                      <option value="pickups">Pickups</option>
+                      <option value="kg">Kg</option>
+                      <option value="points">Points</option>
+                    </select>
+                    <select className="ca-select" value={range} onChange={(e) => setRange(e.target.value as any)}>
+                      <option value="7">7 days</option>
+                      <option value="30">30 days</option>
+                      <option value="90">90 days</option>
+                    </select>
+                    <button className="ca-btn ca-btn--sm" onClick={() => {
+                      if (!series.length) { alert("No data"); return; }
+                      exportCSV(
+                        [["date","pickups","kg","points"], ...series.map((s) => [s.date, String(s.pickups), String(s.kg), String(s.points ?? 0)])],
+                        `collector_series_${new Date().toISOString().slice(0,10)}.csv`
+                      );
+                    }}>
+                      ↓ CSV
+                    </button>
+                  </div>
+                </div>
 
-            <div style={{ flex: "1 1 200px", background: "#fff", padding: 16, borderRadius: 10, boxShadow: "0 8px 18px rgba(11,36,18,0.04)" }}>
-              <div style={{ color: "#666", fontSize: 13 }}>Kg Collected</div>
-              <div style={{ fontSize: 22, fontWeight: 800 }}>{formatNumber(data.kpis.kgCollected)}</div>
-              <div style={{ color: "#888", marginTop: 8 }}>Total kilograms collected</div>
-            </div>
+                <LineChart data={series} valueKey={metric} />
 
-            <div style={{ flex: "1 1 200px", background: "#fff", padding: 16, borderRadius: 10, boxShadow: "0 8px 18px rgba(11,36,18,0.04)" }}>
-              <div style={{ color: "#666", fontSize: 13 }}>Earnings</div>
-              <div style={{ fontSize: 22, fontWeight: 800 }}>Rs {formatNumber(data.kpis.earnings)}</div>
-              <div style={{ color: "#888", marginTop: 8 }}>Estimated payouts</div>
-            </div>
-          </div>
-
-          {/* Charts and breakdown */}
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12, marginTop: 16 }}>
-            <div style={{ background: "#fff", padding: 12, borderRadius: 10 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <div style={{ fontWeight: 800 }}>Pickups trend</div>
-                <div style={{ color: "#666", fontSize: 13 }}>{series.length} points</div>
-              </div>
-
-              <div style={{ width: "100%", height: 140 }}>
-                <LineChart data={pickupsSeries} valueKey="pickups" />
-              </div>
-
-              <div style={{ display: "flex", gap: 12, marginTop: 12, flexWrap: "wrap" }}>
-                <div style={{ color: "#666", fontSize: 13 }}>Latest: <strong style={{ color: "#20382b" }}>{series.length ? series[series.length - 1].pickups : 0} pickups</strong></div>
-                <div style={{ color: "#666", fontSize: 13 }}>Avg pickup time: <strong style={{ color: "#20382b" }}>{data.avgPickupTimeMinutes ? `${data.avgPickupTimeMinutes.toFixed(1)} min` : "—"}</strong></div>
-              </div>
-            </div>
-
-            <aside style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div style={{ background: "#fff", padding: 12, borderRadius: 10 }}>
-                <div style={{ fontWeight: 800, marginBottom: 8 }}>Status breakdown</div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {Object.entries(data.statusCounts).map(([k, v]) => (
-                    <div key={k} style={{ background: "#f7fff7", padding: "6px 10px", borderRadius: 8, display: "flex", gap: 8, alignItems: "center" }}>
-                      <div style={{ fontWeight: 800, color: "#20382b" }}>{v}</div>
-                      <div style={{ color: "#666", textTransform: "capitalize" }}>{k}</div>
-                    </div>
-                  ))}
+                <div className="ca-chart-meta">
+                  <div className="ca-chart-meta__item">
+                    Latest: <strong>{series.length ? (series[series.length - 1] as any)[metric] ?? 0 : 0}</strong>
+                  </div>
+                  <div className="ca-chart-meta__item">
+                    Avg pickup time: <strong>{data.avgPickupTimeMinutes ? `${data.avgPickupTimeMinutes.toFixed(1)} min` : "—"}</strong>
+                  </div>
                 </div>
               </div>
 
-              <div style={{ background: "#fff", padding: 12, borderRadius: 10 }}>
-                <div style={{ fontWeight: 800, marginBottom: 8 }}>Top zones (by kg)</div>
-                <div style={{ minHeight: 120 }}>
-                  <Bars items={topZones} maxW={180} />
+              <aside className="ca-aside">
+                <div className="ca-card">
+                  <div className="ca-card__head">
+                    <div className="ca-card__title">Status breakdown</div>
+                  </div>
+                  <div className="ca-status-chips">
+                    {statusBreakdown.map((s) => (
+                      <div key={s.label} className="ca-chip">
+                        <span className="ca-chip__count">{s.value}</span>
+                        <span className="ca-chip__label">{s.label}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            </aside>
-          </div>
 
-          {/* Table of recent series values */}
-          <div style={{ marginTop: 12, background: "#fff", padding: 12, borderRadius: 10 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontWeight: 800 }}>Recent data</div>
-              <div style={{ color: "#666", fontSize: 13 }}>Date • pickups • kg • earnings</div>
+                <div className="ca-card">
+                  <div className="ca-card__head">
+                    <div className="ca-card__title">Top zones (kg)</div>
+                    <button className="ca-btn ca-btn--sm" onClick={() => {
+                      if (!data.topZones?.length) { alert("No data"); return; }
+                      exportCSV(
+                        [["zone","pickups","kg"], ...data.topZones.map((z) => [z.zone, String(z.pickups), String(z.kg)])],
+                        `collector_zones_${new Date().toISOString().slice(0,10)}.csv`
+                      );
+                    }}>
+                      ↓ CSV
+                    </button>
+                  </div>
+                  <Bars items={topZones} />
+                </div>
+              </aside>
             </div>
 
-            <div style={{ marginTop: 12, overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ textAlign: "left", color: "#666", fontSize: 13 }}>
-                    <th style={{ padding: "8px 6px" }}>Date</th>
-                    <th style={{ padding: "8px 6px" }}>Pickups</th>
-                    <th style={{ padding: "8px 6px" }}>Kg</th>
-                    <th style={{ padding: "8px 6px" }}>Earnings</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {series.slice().reverse().map((s) => (
-                    <tr key={s.date} style={{ borderTop: "1px solid #f2f2f2" }}>
-                      <td style={{ padding: "8px 6px" }}>{new Date(s.date).toLocaleDateString()}</td>
-                      <td style={{ padding: "8px 6px", fontWeight: 800 }}>{s.pickups}</td>
-                      <td style={{ padding: "8px 6px" }}>{s.kg}</td>
-                      <td style={{ padding: "8px 6px" }}>Rs {s.earnings ?? "—"}</td>
+            {/* Recent data table */}
+            <div className="ca-card">
+              <div className="ca-card__head">
+                <div className="ca-card__title">Recent data</div>
+                <span className="ca-table-count">{series.length} data points</span>
+              </div>
+              <div className="ca-table-wrap">
+                <table className="ca-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Pickups</th>
+                      <th>Kg</th>
+                      <th>Points</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {series.slice().reverse().map((s) => (
+                      <tr key={s.date}>
+                        <td>{new Date(s.date).toLocaleDateString()}</td>
+                        <td>{s.pickups}</td>
+                        <td>{s.kg}</td>
+                        <td>{s.points ?? 0}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </main>
     </div>
   );
 }

@@ -1,25 +1,37 @@
-import { useState, createContext, useEffect } from "react";
+// src/App.tsx (or src/App.jsx)
+import React, { useState, createContext, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-import axios from "axios";
-
+import api from "./api";
 import Dashboard from "./pages/Dashboard";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import PostWaste from "./pages/PostWaste";
 import AdminDashboard from "./pages/AdminDashboard";
+import ManageCollectors from "./pages/admin/ManageCollectors";
+import ManageUsers from "./pages/admin/ManageUsers";
+import PricingManagement from "./pages/admin/PricingManagement";
+import Reports from "./pages/admin/Reports";
+import WasteCategories from "./pages/admin/WasteCategories";
+import Certificates from "./pages/Certificates";
 import CollectorDashboard from "./pages/CollectorDashboard";
 import TrackPickup from "./pages/TrackPickup";
 import RewardsPage from "./pages/RewardsPage";
 import ProfilePage from "./pages/ProfilePage";
-import LeaderboardPage from "./pages/LeaderboardPage";
 import AssignedPickups from "./pages/AssignedPickups";
-import CollectorEarnings from "./pages/CollectorEarnings";
 import Explore from "./pages/Explore";
 import MyPickups from "./pages/MyPickup";
 import AvailablePickups from "./pages/AvailablePickup";
 import CollectorAnalytics from "./pages/CollectorAnalytics";
 import CollectorHistory from "./pages/CollectorHistory";
+import CreateCertificate from "./pages/admin/CreateCertificate";
+import AdminAssignPickups from "./pages/admin/AdminAssignPickups";
+import ContactSupportPage from "./pages/ContactPage";
+import FAQPage from "./pages/FAQPage";
+import RecyclingTipsPage from "./pages/RecyclingTipsPage";
+
+
+/* -------------------- Auth context -------------------- */
 
 export interface IAuthContext {
   isAuth: boolean;
@@ -35,17 +47,52 @@ const defaultContext: IAuthContext = {
 
 export const AuthContext = createContext<IAuthContext>(defaultContext);
 
-// ===== Runtime API base (adjust to match your backend) =====
-const RUNTIME_API_BASE = "http://localhost:5000";
-;(window as any).__API_BASE__ = RUNTIME_API_BASE;
-axios.defaults.baseURL = RUNTIME_API_BASE;
+/* -------------------- Helpers -------------------- */
 
 function getDefaultRouteForRole(role: string) {
   const r = (role || "").toString().trim().toLowerCase();
   if (r === "admin") return "/admin";
-  if (r === "collector") return "/collector";
+  if (r === "collector") return "/collector/dashboard";
   return "/dashboard";
 }
+
+function normalizeRole(raw: any) {
+  if (!raw && raw !== "") return "";
+  let s = String(raw || "").trim().toLowerCase();
+  if (s === "administrator" || s === "superadmin") s = "admin";
+  if (s === "mgr" || s === "manager") s = "admin";
+  return s;
+}
+
+/* -------------------- Error boundary -------------------- */
+
+class ErrorBoundary extends React.Component<any, { hasError: boolean; error?: Error }> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: undefined };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: Error, info: any) {
+    console.error("ErrorBoundary caught error:", error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: 24 }}>
+          <h2>Something went wrong</h2>
+          <div style={{ color: "#666" }}>
+            The admin UI encountered an error. Check the console for details. You can try reloading the page.
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+/* -------------------- App -------------------- */
 
 function App() {
   const [authState, setAuthState] = useState({
@@ -53,12 +100,10 @@ function App() {
     roleState: "",
   });
 
-  // authLoading prevents routes from redirecting while we validate token
   const [authLoading, setAuthLoading] = useState(true);
 
-  // Setup axios interceptors once on app start
   useEffect(() => {
-    const reqInterceptor = axios.interceptors.request.use(
+    const reqInterceptor = api.interceptors.request.use(
       (config) => {
         try {
           const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
@@ -71,7 +116,7 @@ function App() {
       (error) => Promise.reject(error)
     );
 
-    const resInterceptor = axios.interceptors.response.use(
+    const resInterceptor = api.interceptors.response.use(
       (resp) => resp,
       (error) => {
         const status = error?.response?.status;
@@ -87,12 +132,11 @@ function App() {
     );
 
     return () => {
-      axios.interceptors.request.eject(reqInterceptor);
-      axios.interceptors.response.eject(resInterceptor);
+      api.interceptors.request.eject(reqInterceptor);
+      api.interceptors.response.eject(resInterceptor);
     };
   }, []);
 
-  // Verify token on startup (if present)
   useEffect(() => {
     let mounted = true;
 
@@ -106,17 +150,21 @@ function App() {
         return;
       }
 
-      axios.defaults.headers.common.Authorization = `Bearer ${token}`;
+      api.defaults.headers.common.Authorization = `Bearer ${token}`;
 
       try {
-        const res = await axios.get("/api/auth/me").catch(() => null);
+        const res = await api.get("/users/profile").catch(() => null);
+        console.log("[auth] /api/users/profile response:", res?.status, res?.data);
 
         if (res && res.data) {
-          const user = res.data.user ?? res.data;
-          const roleFromResponse =
-            (user && user.role) || (res.data.role ?? localStorage.getItem("role")) || "";
+          const raw = res.data;
+          const user = raw.user ?? raw;
+          console.log("[auth] resolved user:", user);
 
-          const role = (roleFromResponse || "").toString().trim().toLowerCase();
+          const roleFromResponse = user?.role ?? raw?.role ?? localStorage.getItem("role") ?? "";
+          const role = normalizeRole(roleFromResponse);
+
+          console.log("[auth] resolved role:", role);
 
           if (!localStorage.getItem("role") && role) localStorage.setItem("role", role);
 
@@ -135,6 +183,7 @@ function App() {
           }
         }
       } catch (err) {
+        console.error("[auth] verifyToken error:", err);
         localStorage.removeItem("token");
         localStorage.removeItem("accessToken");
         localStorage.removeItem("user");
@@ -152,6 +201,10 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    console.log("APP authState:", authState, "authLoading:", authLoading, "location:", window.location.pathname);
+  }, [authState, authLoading]);
+
   if (authLoading) {
     return (
       <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", fontFamily: "Inter, sans-serif" }}>
@@ -166,10 +219,7 @@ function App() {
   return (
     <AuthContext.Provider value={{ ...authState, setAuthState }}>
       <Router>
-        {/* App root is a column flex layout so footer can stick to bottom */}
         <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
-
-          {/* Routes area grows to fill available space */}
           <main style={{ flex: 1 }}>
             <Routes>
               {/* Public Routes */}
@@ -182,24 +232,104 @@ function App() {
                 element={!authState.isAuth ? <RegisterPage /> : <Navigate to={getDefaultRouteForRole(authState.roleState)} />}
               />
               <Route path="/explore" element={<Explore />} />
-
-              {/* Protected Routes (redirect to Home "/" if not authenticated) */}
+              <Route path="/faq" element={<FAQPage />} />
+              <Route path="/support" element={<ContactSupportPage />} />
+              <Route path="/recycling-tips" element={<RecyclingTipsPage />} />
+              
+              {/* Protected Routes */}
               <Route path="/dashboard" element={authState.isAuth ? <Dashboard /> : <Navigate to="/" />} />
 
+              {/* Admin routes wrapped in ErrorBoundary */}
               <Route
                 path="/admin"
-                element={authState.isAuth && authState.roleState === "admin" ? <AdminDashboard /> : <Navigate to="/" />}
+                element={
+                  authState.isAuth && authState.roleState === "admin" ? (
+                    <ErrorBoundary>
+                      <AdminDashboard />
+                    </ErrorBoundary>
+                  ) : (
+                    <Navigate to="/" />
+                  )
+                }
+              />
+              <Route
+                path="/admin/collectors"
+                element={
+                  authState.isAuth && authState.roleState === "admin" ? (
+                    <ErrorBoundary>
+                      <ManageCollectors />
+                    </ErrorBoundary>
+                  ) : (
+                    <Navigate to="/" />
+                  )
+                }
+              />
+              <Route
+                path="/admin/users"
+                element={authState.isAuth && authState.roleState === "admin" ? <ManageUsers /> : <Navigate to="/" />}
+              />
+              <Route
+                path="/admin/pricing"
+                element={authState.isAuth && authState.roleState === "admin" ? <PricingManagement /> : <Navigate to="/" />}
+              />
+              <Route
+                path="/admin/reports"
+                element={authState.isAuth && authState.roleState === "admin" ? <Reports /> : <Navigate to="/" />}
+              />
+              <Route
+                path="/admin/waste-categories"
+                element={authState.isAuth && authState.roleState === "admin" ? <WasteCategories /> : <Navigate to="/" />}
               />
 
+              {/* Admin certificate management */}
               <Route
-                path="/collector"
+                path="/admin/certificates"
+                element={
+                  authState.isAuth && authState.roleState === "admin" ? (
+                    <ErrorBoundary>
+                      <Certificates />
+                    </ErrorBoundary>
+                  ) : (
+                    <Navigate to="/" />
+                  )
+                }
+              />
+              <Route
+                path="/admin/certificates/create"
+                element={authState.isAuth && authState.roleState === "admin" ? <CreateCertificate /> : <Navigate to="/" />}
+              />
+              <Route
+                path="/admin/certificates/:id/edit"
+                element={authState.isAuth && authState.roleState === "admin" ? <CreateCertificate /> : <Navigate to="/" />}
+              />
+
+              {/* Admin assign pickups (new) */}
+              <Route
+                path="/admin/assign-pickups"
+                element={
+                  authState.isAuth && authState.roleState === "admin" ? (
+                    <ErrorBoundary>
+                      <AdminAssignPickups />
+                    </ErrorBoundary>
+                  ) : (
+                    <Navigate to="/" />
+                  )
+                }
+              />
+
+              {/* Collector routes */}
+              <Route
+                path="/collector/dashboard"
                 element={authState.isAuth && authState.roleState === "collector" ? <CollectorDashboard /> : <Navigate to="/" />}
               />
-
-              <Route path="/post-waste" element={authState.isAuth ? <PostWaste /> : <Navigate to="/" />} />
-
-              <Route path="/track/:id" element={authState.isAuth ? <TrackPickup /> : <Navigate to="/" />} />
-
+              <Route
+                path="/collector"
+                element={authState.isAuth && authState.roleState === "collector" ? <Navigate to="/collector/dashboard" replace /> : <Navigate to="/" />}
+              />
+              <Route
+                path="/collector/rewards"
+                element={authState.isAuth && authState.roleState === "collector" ? <RewardsPage /> : <Navigate to="/" />}
+              />
               <Route
                 path="/collector/assigned"
                 element={authState.isAuth && authState.roleState === "collector" ? <AssignedPickups /> : <Navigate to="/" />}
@@ -208,29 +338,31 @@ function App() {
                 path="/collector/available"
                 element={authState.isAuth && authState.roleState === "collector" ? <AvailablePickups /> : <Navigate to="/" />}
               />
-
               <Route
-                path="/collector/earnings"
-                element={authState.isAuth && authState.roleState === "collector" ? <CollectorEarnings /> : <Navigate to="/" />}
+                path="/collector/analytics"
+                element={authState.isAuth && authState.roleState === "collector" ? <CollectorAnalytics /> : <Navigate to="/" />}
               />
-              <Route path="/collector/analytics" element={authState.isAuth && authState.roleState === "collector" ? <CollectorAnalytics /> : <Navigate to="/" />}/>
-              <Route path="/collector/history" element={authState.isAuth && authState.roleState === "collector" ? <CollectorHistory /> : <Navigate to="/" />}/>
-              <Route path="/pickups" element={authState.isAuth ? <MyPickups /> : <Navigate to="/" />} />
-              <Route path="/rewards" element={authState.isAuth ? <RewardsPage /> : <Navigate to="/" />} />
+              <Route
+                path="/collector/history"
+                element={authState.isAuth && authState.roleState === "collector" ? <CollectorHistory /> : <Navigate to="/" />}
+              />
 
+              <Route path="/post-waste" element={authState.isAuth ? <PostWaste /> : <Navigate to="/" />} />
+              <Route path="/track/:id" element={authState.isAuth ? <TrackPickup /> : <Navigate to="/" />} />
+              <Route path="/pickups" element={authState.isAuth ? <MyPickups /> : <Navigate to="/" />} />
+
+              {/* Rewards & other pages */}
+              <Route path="/rewards" element={authState.isAuth ? <RewardsPage /> : <Navigate to="/" />} />
+              <Route path="/certificates" element={authState.isAuth ? <Certificates /> : <Navigate to="/" />} />
               <Route path="/profile" element={authState.isAuth ? <ProfilePage /> : <Navigate to="/" />} />
 
-              <Route path="/leaderboard" element={authState.isAuth ? <LeaderboardPage /> : <Navigate to="/" />} />
-
-              {/* Landing: show HomePage if NOT authenticated; otherwise redirect to role-aware route */}
+              {/* Landing */}
               <Route path="/" element={!authState.isAuth ? <HomePage /> : <Navigate to={getDefaultRouteForRole(authState.roleState)} replace />} />
 
               {/* Fallback */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </main>
-
-         
         </div>
       </Router>
     </AuthContext.Provider>

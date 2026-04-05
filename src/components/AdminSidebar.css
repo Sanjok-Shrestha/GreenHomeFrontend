@@ -1,0 +1,66 @@
+/* AdminSidebar.css - lightweight styles consistent with your app */
+.admin-sidebar {
+  width: 260px;
+  min-width: 260px;
+  background: linear-gradient(180deg,#16382f,#123023);
+  color: #e6f4ec;
+  padding: 18px 12px;
+  box-shadow: 2px 0 12px rgba(0,0,0,0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-sizing: border-box;
+}
+.admin-sidebar--collapsed { width: 88px; min-width: 88px; }
+
+.admin-sidebar__top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.admin-sidebar__brand { display:flex; align-items:center; gap:10px; width:100%; }
+.admin-sidebar__logo { font-weight:800; font-size:18px; letter-spacing:0.2px; }
+.admin-sidebar__title { font-size:13px; color: rgba(230,244,236,0.9); }
+
+.admin-sidebar__collapse {
+  margin-right: 6px;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.06);
+  color: #fff;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.admin-sidebar__nav { display:flex; flex-direction:column; gap:6px; margin-top:8px; }
+
+.admin-sidebar__link {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 12px;
+  border-radius:8px;
+  color: #cfe8d6;
+  text-decoration:none;
+  transition: background .12s, transform .08s;
+}
+.admin-sidebar__link:hover { background: rgba(255,255,255,0.03); color: #fff; transform: translateY(-1px); }
+.admin-sidebar__link--active { background: rgba(255,255,255,0.06); color: #fff; font-weight:700; }
+
+.admin-sidebar__icon { width:28px; text-align:center; font-size:16px; }
+.admin-sidebar__label { font-size:14px; }
+
+.admin-sidebar__bottom {
+  margin-top:auto;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding-top:8px;
+  border-top: 1px solid rgba(255,255,255,0.03);
+}
+.admin-sidebar__user { display:flex; align-items:center; gap:8px; }
+.admin-sidebar__avatar {
+  width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg,#18a34a,#0f7a35); display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800;
+}
+.admin-sidebar__username { font-size:13px; font-weight:700; color:#e9f7ee; }
+
+.admin-sidebar__logout {
+  background: transparent; border: 1px solid rgba(255,255,255,0.06); color: #fff; padding: 8px 10px; border-radius: 8px; cursor: pointer;
+}

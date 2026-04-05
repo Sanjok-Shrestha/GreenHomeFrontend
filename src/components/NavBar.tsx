@@ -38,18 +38,17 @@ export default function NavBar() {
   const commonLinksGuest = [
     { to: "/", label: "Home" },
     { to: "/explore", label: "Explore" },
-    { to: "/rewards", label: "Rewards" },
+    
   ];
 
   const commonLinksAuth = [
     { to: "/explore", label: "Explore" },
-    { to: "/rewards", label: "Rewards" },
+    
   ];
 
   // Auth/role specific links
   const userLinks = [
     { to: "/post-waste", label: "Post Waste" },
-    { to: "/leaderboard", label: "Leaderboard" },
   ];
 
   const collectorLinks = [

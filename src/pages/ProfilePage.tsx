@@ -1,14 +1,4 @@
-/**
- * ProfilePage — Waste collection platform (with sidebar and reduced gutter)
- *
- * Notes:
- * - I preserved your original GLOBAL_CSS unchanged.
- * - Sidebar is added via inline styles only.
- * - The pp-wrap element has an inline style marginLeft: 12 and maxWidth calc to reduce empty area.
- *
- * Save as: src/pages/ProfilePage.tsx
- */
-
+// src/pages/ProfilePage.tsx
 import React, {
   useCallback,
   useEffect,
@@ -16,13 +6,11 @@ import React, {
   useRef,
   useState,
 } from "react";
-import axios, { AxiosError, type AxiosInstance } from "axios";
-import { useNavigate, NavLink } from "react-router-dom";
+import axios, { AxiosError } from "axios";
+import { useNavigate } from "react-router-dom";
 import api from "../api";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────────────────────
+import Sidebar from "../components/Sidebar";
+import CollectorSidebar from "../components/CollectorSidebar";
 
 type Address = {
   line1?: string;
@@ -55,32 +43,16 @@ type User = {
   vehicle?: Vehicle;
   receiveEmails?: boolean;
   receiveSMS?: boolean;
+
+  // Collector-specific stats
+  assignedCount?: number;
+  completedThisMonth?: number;
+  kgCollected?: number;
+
+  // User-specific stats
+  postCount?: number;
+  rewards?: number;
 };
-
-// ─────────────────────────────────────────────────────────────────────────────
-// API client — isolated instance, never mutates axios.defaults
-// ─────────────────────────────────────────────────────────────────────────────
-
-const API_BASE =
-  (typeof window !== "undefined" && (window as any).__API_BASE__) ||
-  "http://localhost:5000";
-
-function createApiClient(): AxiosInstance {
-  const instance = axios.create({ baseURL: API_BASE });
-  instance.interceptors.request.use((config) => {
-    const token =
-      localStorage.getItem("accessToken") || localStorage.getItem("token");
-    if (token) config.headers["Authorization"] = `Bearer ${token}`;
-    return config;
-  });
-  return instance;
-}
-
-const localApi = api || createApiClient();
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Global styles — unchanged from original (kept exactly)
-// ─────────────────────────────────────────────────────────────────────────────
 
 const GLOBAL_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=DM+Sans:wght@300;400;500;600&display=swap');
@@ -133,7 +105,7 @@ const GLOBAL_CSS = `
     animation: fadeUp 0.28s var(--ease) both;
   }
 
-  /* ── Card ── */
+  /* ��─ Card ── */
   .pp-card {
     background: #fff;
     border-radius: var(--r-xl);
@@ -486,32 +458,7 @@ const GLOBAL_CSS = `
   .pp-error-msg { color: #c53030; font-size: 14px; font-weight: 500; margin-bottom: 18px; }
 `;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Sidebar nav links (simple)
-// ─────────────────────────────────────────────────────────────────────────────
-
-const SIDEBAR_LINKS = [
-  { to: "/", label: "Home", key: "home" },
-  { to: "/post-waste", label: "Post waste", key: "post" },
-  { to: "/collector/assigned", label: "Assigned Pickups", key: "assigned" },
-  { to: "/rewards", label: "Rewards", key: "rewards" },
-  { to: "/profile", label: "Profile", key: "profile" },
-];
-
-function iconFor(key: string) {
-  switch (key) {
-    case "home": return "🏠";
-    case "post": return "➕";
-    case "assigned": return "📦";
-    case "rewards": return "🎁";
-    case "profile": return "👤";
-    default: return "•";
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Utilities (unchanged)
-// ─────────────────────────────────────────────────────────────────────────────
+/* ========================= helpers & small components ========================= */
 
 function maskBank(account?: string): string {
   if (!account) return "—";
@@ -535,7 +482,9 @@ function displaySocial(href: string): string {
 
 function normalizeAvatarUrl(url: string): string {
   if (/^https?:\/\//i.test(url)) return url;
-  return `${API_BASE.replace(/\/$/, "")}/${url.replace(/^\//, "")}`;
+  const base = (api.defaults.baseURL || "").replace(/\/api\/?$/i, "");
+  const fallback = (window as any).__API_BASE__ || base || "http://localhost:5000";
+  return `${fallback.replace(/\/$/, "")}/${url.replace(/^\//, "")}`;
 }
 
 function getInitials(name?: string): string {
@@ -543,7 +492,6 @@ function getInitials(name?: string): string {
   return name.split(" ").map((s) => s[0]).join("").slice(0, 2).toUpperCase();
 }
 
-// Fixed: return ArrayBuffer which is valid BufferSource for subscription
 function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -554,10 +502,6 @@ function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
   }
   return output.buffer;
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Small components (unchanged)
-// ─────────────────────────────────────────────────────────────────────────────
 
 function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
@@ -650,10 +594,7 @@ function ProfileSkeleton() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Push hook (unchanged)
-// ─────────────────────────────────────────────────────────────────────────────
-
+/* ========== push subscription hook (uses notifications endpoints) ========== */
 function usePushSubscription(userId?: string) {
   const [pushEnabled, setPushEnabled] = useState(false);
   const [checkingPush, setCheckingPush] = useState(false);
@@ -671,9 +612,9 @@ function usePushSubscription(userId?: string) {
             if (sub && !cancelled) { setPushEnabled(true); return; }
           }
         }
-        const res = await localApi.get("/api/users/push-subscription/exists");
+        const res = await api.get("/notifications/push-subscription/exists");
         if (!cancelled && res.data?.exists) setPushEnabled(true);
-      } catch { /* push optional */ } finally {
+      } catch { /* optional */ } finally {
         if (!cancelled) setCheckingPush(false);
       }
     })();
@@ -687,32 +628,39 @@ function usePushSubscription(userId?: string) {
     try {
       const reg = await navigator.serviceWorker.register("/sw.js");
       if ((await Notification.requestPermission()) !== "granted") { toast("Permission denied"); return; }
-      const res = await localApi.get("/api/notifications/vapidPublicKey");
+      const res = await api.get("/notifications/vapidPublicKey");
       if (!res.data?.key) { toast("VAPID key unavailable"); return; }
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(res.data.key),
       });
-      await localApi.post("/api/users/push-subscription", { subscription: sub });
+      await api.post("/notifications/push-subscription", { subscription: sub });
       setPushEnabled(true); toast("Browser notifications enabled");
-    } catch { toast("Failed to enable notifications"); }
+    } catch (err) {
+      console.error("enable push error", err);
+      toast("Failed to enable notifications");
+    }
   }, []);
 
   const disable = useCallback(async (toast: (m: string) => void) => {
     try {
-      await localApi.delete("/api/users/push-subscription");
+      await api.delete("/notifications/push-subscription");
       const reg = await navigator.serviceWorker.getRegistration();
-      if (reg) { const sub = await reg.pushManager.getSubscription(); if (sub) await sub.unsubscribe(); }
+      if (reg) {
+        const sub = await reg.pushManager.getSubscription();
+        if (sub) await sub.unsubscribe();
+      }
       setPushEnabled(false); toast("Browser notifications disabled");
-    } catch { toast("Failed to disable notifications"); }
+    } catch (err) {
+      console.error("disable push error", err);
+      toast("Failed to disable notifications");
+    }
   }, []);
 
   return { pushEnabled, checkingPush, enable, disable };
 }
 
-// ──��──────────────────────────────────────────────────────────────────────────
-// ProfilePage (main component) — sidebar added via inline styles only
-// ─────────────────────────────────────────────────────────────────────────────
+/* ========================= ProfilePage component ========================= */
 
 const ProfilePage: React.FC = () => {
   const navigate = useNavigate();
@@ -738,7 +686,6 @@ const ProfilePage: React.FC = () => {
   const { pushEnabled, checkingPush, enable: enablePush, disable: disablePush } =
     usePushSubscription(user?.id);
 
-  // ── Fetch profile ────────────────────────────────────────────────────────
   useEffect(() => {
     const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
     if (!token) { navigate("/login", { replace: true }); return; }
@@ -747,14 +694,14 @@ const ProfilePage: React.FC = () => {
     (async () => {
       setLoading(true); setError(null);
       try {
-        const res = await localApi.get<User>("/api/users/profile", { signal: ctrl.signal });
+        const res = await api.get<User>("/users/profile", { signal: ctrl.signal });
         if (res.data) {
           setUser(res.data); setDraft(res.data);
           try { localStorage.setItem("user", JSON.stringify(res.data)); } catch {}
         }
       } catch (err) {
-        const any = err as any;
-        if (axios.isCancel?.(err) || any?.code === "ERR_CANCELED") return;
+        const anyErr = err as any;
+        if (axios.isCancel?.(err) || anyErr?.code === "ERR_CANCELED") return;
         if ((err as AxiosError).response?.status === 401) {
           ["accessToken", "token", "user"].forEach(k => localStorage.removeItem(k));
           navigate("/login", { replace: true });
@@ -766,18 +713,12 @@ const ProfilePage: React.FC = () => {
     return () => ctrl.abort();
   }, [navigate]);
 
-  // ── Derived ──────────────────────────────────────────────────────────────
   const initials  = useMemo(() => getInitials(user?.name), [user?.name]);
   const avatarSrc = useMemo(() => user?.avatarUrl ? normalizeAvatarUrl(user.avatarUrl) : null, [user?.avatarUrl]);
   const joined    = user?.createdAt
     ? new Date(user.createdAt).toLocaleDateString(undefined, { year: "numeric", month: "short" })
     : "—";
 
-  // ── Actions ──────────────────────────────────────────────────────────────
-  const handleLogout  = () => {
-    ["accessToken", "token", "user", "role"].forEach(k => localStorage.removeItem(k));
-    navigate("/login", { replace: true });
-  };
   const handleCopy    = async (text?: string) => {
     if (!text) return;
     try { await navigator.clipboard.writeText(text); showToast("Copied"); }
@@ -789,99 +730,50 @@ const ProfilePage: React.FC = () => {
     if (!draft) return;
     setSaving(true);
     try {
-      const res = await localApi.put<User>("/api/users/profile", {
+      const payload: any = {
         name: draft.name, phone: draft.phone, bio: draft.bio,
         social: draft.social, address: draft.address,
         receiveEmails: draft.receiveEmails, receiveSMS: draft.receiveSMS,
-      });
-      const updated = res.data ?? draft;
+      };
+
+      if ((draft.role || user?.role) === "collector") {
+        if (draft.bankAccount !== undefined) payload.bankAccount = draft.bankAccount;
+        if (draft.vehicle !== undefined) payload.vehicle = draft.vehicle;
+      }
+
+      const res = await api.put<User>("/users/profile", payload);
+      const updated = res.data ?? { ...draft };
       setUser(updated); setDraft(updated); setEditMode(false);
       showToast("Profile saved");
       try { localStorage.setItem("user", JSON.stringify(updated)); } catch {}
-    } catch { showToast("Save failed — please try again"); }
-    finally { setSaving(false); }
+    } catch (err) {
+      console.error("Profile save error", err);
+      showToast("Save failed — please try again");
+    } finally { setSaving(false); }
   };
 
   const patchDraft   = (p: Partial<User>)                               => setDraft(d => ({ ...(d ?? {}), ...p }));
   const patchAddress = (p: Partial<Address>)                            => setDraft(d => ({ ...(d ?? {}), address: { ...(d?.address ?? {}), ...p } }));
   const patchSocial  = (p: Partial<NonNullable<User["social"]>>)        => setDraft(d => ({ ...(d ?? {}), social:  { ...(d?.social  ?? {}), ...p } }));
 
-  // Sidebar user display
-  const sidebarName = useMemo(() => {
-    try { const raw = localStorage.getItem("user"); if (!raw) return "User"; const parsed = JSON.parse(raw); return parsed?.name ?? "User"; } catch { return "User"; }
-  }, []);
+  const effectiveRole = user?.role ?? (typeof window !== "undefined" ? localStorage.getItem("role") ?? undefined : undefined);
 
-  // ── Render ───────────────────────────────────────────────────────────────
   return (
     <>
       <style>{GLOBAL_CSS}</style>
 
       <div style={{ display: "flex", minHeight: "100vh" }}>
-        {/* Sidebar inserted with inline styles only (no GLOBAL_CSS changes) */}
-        <aside
-          aria-label="Primary navigation"
-          style={{
-            width: 260,
-            background: "linear-gradient(180deg,#16382f,#123023)",
-            color: "#fff",
-            padding: 16,
-            boxSizing: "border-box",
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-            minHeight: "100vh",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ fontSize: 20 }}>♻️</div>
-            <div>
-              <div style={{ fontWeight: 800 }}>GreenHome</div>
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.8)" }}>Community recycling</div>
-            </div>
-          </div>
+        {effectiveRole === "collector" ? <CollectorSidebar /> : <Sidebar />}
 
-          <nav aria-label="Sidebar" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {SIDEBAR_LINKS.map((l) => (
-              <NavLink
-                key={l.to}
-                to={l.to}
-                style={({ isActive }) => ({
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: "8px 10px",
-                  borderRadius: 8,
-                  color: isActive ? "#fff" : "#e6eef0",
-                  textDecoration: "none",
-                  background: isActive ? "rgba(255,255,255,0.05)" : "transparent",
-                  fontWeight: isActive ? 700 : 400,
-                })}
-              >
-                <span style={{ width: 20, textAlign: "center" }}>{iconFor(l.key)}</span>
-                <span>{l.label}</span>
-              </NavLink>
-            ))}
-          </nav>
-
-          <div style={{ marginTop: "auto" }}>
-            <div style={{ fontWeight: 700 }}>{sidebarName}</div>
-            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-              <NavLink to="/profile" style={{ color: "#fff", textDecoration: "none" }}>Profile</NavLink>
-              <button onClick={handleLogout} className="btn" style={{ marginLeft: "auto", background: "#e74c3c", color: "#fff", border: "none" }}>Logout</button>
-            </div>
-          </div>
-        </aside>
-
-        {/* Main profile content */}
         <main style={{ flex: 1 }}>
           <div className="pp">
             <div className="pp-page">
-              {/* Reduced gutter: inline marginLeft and constrained maxWidth so card uses more horizontal space */}
               <div
                 className="pp-wrap"
                 style={{
-                  marginLeft: 12,
-                  maxWidth: "calc(100% - 260px - 32px)", // 260 = sidebar width, 32px gutter
+                  margin: "0 auto",
+                  maxWidth: 1100,
+                  padding: "0 18px",
                 }}
               >
                 {loading ? <ProfileSkeleton /> : error ? (
@@ -896,7 +788,6 @@ const ProfilePage: React.FC = () => {
 
                   <div className="pp-card">
 
-                    {/* ── Hero ── */}
                     <div className="pp-hero">
                       <div className="pp-hero-inner">
                         <div className="pp-avatar">
@@ -932,12 +823,6 @@ const ProfilePage: React.FC = () => {
                       </div>
 
                       <div className="pp-hero-row">
-                        <button className="btn btn-hero-cta" onClick={() => navigate("/post-waste")}>
-                          <LeafIcon /> Post waste
-                        </button>
-                        <button className="btn btn-hero" onClick={() => navigate("/collector/assigned")}>Pickups</button>
-                        <button className="btn btn-hero" onClick={() => navigate("/rewards")}>Rewards</button>
-
                         <span className="pp-hero-spacer" />
 
                         {editMode ? (
@@ -950,23 +835,28 @@ const ProfilePage: React.FC = () => {
                         ) : (
                           <>
                             <button className="btn btn-hero" onClick={handleEdit}><EditIcon /> Edit</button>
-                            <button className="btn btn-hero btn-hero-danger" onClick={handleLogout}>Log out</button>
                           </>
                         )}
                       </div>
                     </div>
 
-                    {/* ── Stats ── */}
-                    <div className="pp-stats">
-                      <StatCell label="Assigned" value="—" />
-                      <StatCell label="Completed (mo)" value="—" />
-                      <StatCell label="Kg collected" value="—" />
-                    </div>
+                    {/* Conditional Stats: collectors see collector stats; regular users see user stats */}
+                    {user.role === "collector" ? (
+                      <div className="pp-stats">
+                        <StatCell label="Assigned" value={user.assignedCount != null ? String(user.assignedCount) : "—"} />
+                        <StatCell label="Completed (mo)" value={user.completedThisMonth != null ? String(user.completedThisMonth) : "—"} />
+                        <StatCell label="Kg collected" value={user.kgCollected != null ? String(user.kgCollected) : "—"} />
+                      </div>
+                    ) : (
+                      <div className="pp-stats">
+                        <StatCell label="Posts" value={user.postCount != null ? String(user.postCount) : "—"} />
+                        <StatCell label="Rewards" value={user.rewards != null ? String(user.rewards) : "—"} />
+                        <StatCell label="Points" value={user.points != null ? String(user.points) : "—"} />
+                      </div>
+                    )}
 
-                    {/* ── Sections ── */}
                     <div className="pp-sections">
 
-                      {/* Contact */}
                       <section className="pp-section">
                         <SectionHead icon={<EmailIcon />} title="Contact" />
                         <InfoRow
@@ -1011,7 +901,6 @@ const ProfilePage: React.FC = () => {
                         )}
                       </section>
 
-                      {/* Address */}
                       <section className="pp-section">
                         <SectionHead icon={<PinIcon />} title="Address" />
                         {editMode ? (
@@ -1036,7 +925,6 @@ const ProfilePage: React.FC = () => {
                         )}
                       </section>
 
-                      {/* Social */}
                       <section className="pp-section">
                         <SectionHead title="Social links" />
                         {editMode ? (
@@ -1054,20 +942,31 @@ const ProfilePage: React.FC = () => {
                         ) : <p className="pp-empty">No social links added.</p>}
                       </section>
 
-                      {/* Collector info */}
-                      <section className="pp-section">
-                        <SectionHead icon={<TruckIcon />} title="Collector info" />
-                        {user.role === "collector" ? (
-                          <>
-                            <div className="pp-collector-badge"><TruckIcon /> Active collector</div>
-                            <InfoRow label="Bank" value={maskBank(user.bankAccount)} />
-                            {user.vehicle && (
-                              <InfoRow label="Vehicle" value={[user.vehicle.make, user.vehicle.model].filter(Boolean).join(" ") || "—"} />
-                            )}
-                            {user.vehicle?.plate && <InfoRow label="Plate" value={user.vehicle.plate} />}
-                          </>
-                        ) : <p className="pp-empty">Not a collector account.</p>}
-                      </section>
+                      {user.role === "collector" && (
+                        <section className="pp-section">
+                          <SectionHead icon={<TruckIcon />} title="Collector info" />
+
+                          <div className="pp-collector-badge"><TruckIcon /> Active collector</div>
+
+                          {editMode ? (
+                            <>
+                              <label style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginBottom: 6 }}>Bank account</label>
+                              <input className="pp-input" placeholder="Bank account number" value={draft?.bankAccount ?? ""} onChange={e => patchDraft({ bankAccount: e.target.value })} />
+
+                              <label style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginTop: 8, marginBottom: 6 }}>Vehicle</label>
+                              <input className="pp-input" placeholder="Make" value={draft?.vehicle?.make ?? ""} onChange={e => patchDraft({ vehicle: { ...(draft?.vehicle ?? {}), make: e.target.value } })} />
+                              <input className="pp-input" placeholder="Model" value={draft?.vehicle?.model ?? ""} onChange={e => patchDraft({ vehicle: { ...(draft?.vehicle ?? {}), model: e.target.value } })} />
+                              <input className="pp-input" placeholder="Plate" value={draft?.vehicle?.plate ?? ""} onChange={e => patchDraft({ vehicle: { ...(draft?.vehicle ?? {}), plate: e.target.value } })} />
+                            </>
+                          ) : (
+                            <>
+                              <InfoRow label="Bank" value={maskBank(user.bankAccount)} />
+                              {user.vehicle && <InfoRow label="Vehicle" value={[user.vehicle.make, user.vehicle.model].filter(Boolean).join(" ") || "—"} />}
+                              {user.vehicle?.plate && <InfoRow label="Plate" value={user.vehicle.plate} />}
+                            </>
+                          )}
+                        </section>
+                      )}
 
                     </div>
                   </div>
@@ -1085,10 +984,7 @@ const ProfilePage: React.FC = () => {
 
 export default ProfilePage;
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   Icons (unchanged)
-   ───────────────────────────────────────────────────────────────────────────── */
-
+/* ============== small icons ============== */
 const EditIcon  = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden><path d="M3 21v-3.6L15.6 4.8a1 1 0 0 1 1.4 0l2.2 2.2a1 1 0 0 1 0 1.4L6.6 21H3z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M14 6l4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>;
 const EmailIcon = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden><rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="1.5"/><path d="M3 7l9 6 9-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>;
 const PinIcon   = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 1 1 18 0z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><circle cx="12" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.5"/></svg>;

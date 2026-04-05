@@ -1,18 +1,29 @@
 import axios from "axios";
 
-const API_BASE = (window as any).__API_BASE__ || "http://localhost:5000";
+const API_BASE = (window as any).__API_BASE__ || "http://localhost:5000/api";
 
 const api = axios.create({
   baseURL: API_BASE,
   timeout: 20000,
+  withCredentials: true,
+  headers: {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  },
 });
 
-// Attach token automatically on every request
+// debug: confirm runtime baseURL
+console.debug("[api] baseURL =", api.defaults.baseURL);
+
 api.interceptors.request.use(
   (config) => {
     try {
       const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
-      if (token && config.headers) config.headers.Authorization = `Bearer ${token}`;
+      if (token) {
+        // ensure headers object exists
+        config.headers = config.headers || {};
+        config.headers["Authorization"] = `Bearer ${token}`;
+      }
     } catch (e) {
       // ignore
     }
@@ -21,18 +32,17 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Optional: global response interceptor to auto-handle 401
 api.interceptors.response.use(
   (r) => r,
   (error) => {
     const status = error?.response?.status;
     if (status === 401) {
-      // optional: clear storage and reload app so UI handles redirect
+      // clear stored auth and optionally redirect to login
       localStorage.removeItem("accessToken");
       localStorage.removeItem("token");
       localStorage.removeItem("user");
       localStorage.removeItem("role");
-      // don't navigate here (api.ts doesn't have router); let pages handle it
+      console.warn("[api] 401 - cleared local tokens");
     }
     return Promise.reject(error);
   }

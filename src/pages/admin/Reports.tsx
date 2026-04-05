@@ -1,43 +1,35 @@
 import { useEffect, useMemo, useState } from "react";
 import api from "../../api";
+import AdminSidebar from "../../components/AdminSidebar";
+import "./Reports.css";
 
 type Summary = {
-  totalUsers?: number;
-  totalPosts?: number;
-  totalPickups?: number;
-  totalEarnings?: number;
+  totalUsers?: number; totalPosts?: number;
+  totalPickups?: number; totalEarnings?: number;
 };
-
 type Row = {
-  id: string;
-  date: string;
-  user?: string;
-  wasteType?: string;
-  quantity?: number;
-  price?: number;
-  status?: string;
+  id?: string; _id?: string; date: string; user?: string;
+  wasteType?: string; quantity?: number; price?: number; status?: string;
 };
 
 export default function Reports() {
-  const [from, setFrom] = useState<string>("");
-  const [to, setTo] = useState<string>("");
+  const [from,    setFrom]    = useState("");
+  const [to,      setTo]      = useState("");
   const [summary, setSummary] = useState<Summary>({});
-  const [rows, setRows] = useState<Row[]>([]);
+  const [rows,    setRows]    = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error,   setError]   = useState<string | null>(null);
 
   async function load() {
     setLoading(true); setError(null);
     try {
-      const res = await api.get<{ summary: Summary; rows: Row[] }>("/api/admin/reports", { params: { from, to } });
-      setSummary(res.data.summary ?? {});
-      setRows(res.data.rows ?? []);
+      const res  = await api.get("/admin/reports", { params: { from, to } });
+      const data = res.data;
+      if (Array.isArray(data)) { setRows(data); setSummary({}); }
+      else { setSummary(data.summary ?? {}); setRows(data.rows ?? []); }
     } catch (err: any) {
-      console.error("Failed to load reports", err);
       setError(err?.response?.data?.message || "Failed to load reports");
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }
 
   useEffect(() => { load(); }, []);
@@ -46,78 +38,153 @@ export default function Reports() {
 
   function exportCSV() {
     if (!rows.length) return alert("No data to export");
-    const header = ["id", "date", "user", "wasteType", "quantity", "price", "status"];
-    const csv = [header.join(","), ...rows.map((r) => header.map((h) => `"${String((r as any)[h] ?? "").replace(/"/g, '""')}"`).join(","))].join("\n");
+    const header = ["id","date","user","wasteType","quantity","price","status"];
+    const csvRows = rows.map((r) =>
+      [r.id ?? r._id ?? "", r.date ?? "", r.user ?? "", r.wasteType ?? "",
+       String(r.quantity ?? ""), String(r.price ?? ""), r.status ?? ""]
+      .map((c) => `"${String(c).replace(/"/g,'""')}"`).join(",")
+    );
+    const csv  = [header.join(","), ...csvRows].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = URL.createObjectURL(blob);
     a.download = `report_${new Date().toISOString().slice(0,10)}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
   }
 
+  function clearFilter() { setFrom(""); setTo(""); setTimeout(load, 0); }
+
+  function statusClass(s?: string) {
+    const key = (s ?? "").toLowerCase();
+    if (key === "collected" || key === "completed") return "rp-status rp-status--collected";
+    if (key === "pending")  return "rp-status rp-status--pending";
+    if (key === "rejected") return "rp-status rp-status--rejected";
+    return "rp-status";
+  }
+
   return (
-    <div style={{ padding: 20, maxWidth: 1100, margin: "0 auto" }}>
-      <h2>Reports</h2>
-      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-        <label style={{ display: "flex", flexDirection: "column" }}>
-          From
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={{ padding: 8, borderRadius: 6, border: "1px solid #ddd" }} />
-        </label>
-        <label style={{ display: "flex", flexDirection: "column" }}>
-          To
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={{ padding: 8, borderRadius: 6, border: "1px solid #ddd" }} />
-        </label>
-        <button onClick={load} style={button}>Filter</button>
-        <button onClick={() => { setFrom(""); setTo(""); load(); }} style={buttonAlt}>Clear</button>
-        <div style={{ flex: 1 }} />
-        <button onClick={exportCSV} style={buttonAlt}>Export CSV</button>
-      </div>
+    <div className="admin-page" style={{ display: "flex", minHeight: "100vh", background: "var(--bg, #fff)" }}>
+      <AdminSidebar />
 
-      {loading ? <div>Loading…</div> : error ? <div style={{ color: "crimson" }}>{error}</div> : (
-        <>
-          <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
-            <div style={summaryCard}><div style={{color:"#666"}}>Total Users</div><div style={{fontWeight:800}}>{summary.totalUsers ?? 0}</div></div>
-            <div style={summaryCard}><div style={{color:"#666"}}>Total Posts</div><div style={{fontWeight:800}}>{summary.totalPosts ?? 0}</div></div>
-            <div style={summaryCard}><div style={{color:"#666"}}>Total Pickups</div><div style={{fontWeight:800}}>{summary.totalPickups ?? 0}</div></div>
-            <div style={summaryCard}><div style={{color:"#666"}}>Total Earnings</div><div style={{fontWeight:800}}>{summary.totalEarnings ?? 0}</div></div>
+      <main className="admin-main" style={{ flex: 1 }}>
+        <div className="rp-page">
+
+          {/* ── Header ── */}
+          <div className="rp-header">
+            <div>
+              <h2 className="rp-title">Reports</h2>
+              <p className="rp-sub">Pickup activity and revenue overview</p>
+            </div>
           </div>
 
-          <div style={{ background: "#fff", padding: 12, borderRadius: 8 }}>
-            <div style={{ marginBottom: 8, color: "#666" }}>Total rows: {rows.length} • Revenue: Rs {totalRevenue}</div>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  <th style={th}>Date</th>
-                  <th style={th}>User</th>
-                  <th style={th}>Type</th>
-                  <th style={th}>Qty</th>
-                  <th style={th}>Price</th>
-                  <th style={th}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.id}>
-                    <td style={td}>{new Date(r.date).toLocaleString()}</td>
-                    <td style={td}>{r.user}</td>
-                    <td style={td}>{r.wasteType}</td>
-                    <td style={td}>{r.quantity}</td>
-                    <td style={td}>Rs {r.price}</td>
-                    <td style={td}>{r.status}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          {/* ── Toolbar ── */}
+          <div className="rp-toolbar">
+            <div className="rp-field">
+              <span className="rp-label">From</span>
+              <input
+                type="date"
+                className="rp-date"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+                aria-label="From date"
+              />
+            </div>
+
+            <div className="rp-field">
+              <span className="rp-label">To</span>
+              <input
+                type="date"
+                className="rp-date"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+                aria-label="To date"
+              />
+            </div>
+
+            <button className="rp-btn rp-btn--primary" onClick={load} disabled={loading}>
+              {loading ? "Loading…" : "Filter"}
+            </button>
+
+            <button className="rp-btn" onClick={clearFilter} disabled={loading}>
+              Clear
+            </button>
+
+            <div className="rp-toolbar__actions">
+              <button className="rp-btn rp-btn--export" onClick={exportCSV} disabled={!rows.length}>
+                ↓ Export CSV
+              </button>
+            </div>
           </div>
-        </>
-      )}
+
+          {/* ── States ── */}
+          {loading && <div className="rp-loading">Loading report…</div>}
+          {error   && <div className="rp-error">⚠ {error}</div>}
+
+          {!loading && !error && (
+            <>
+              {/* ── Summary metrics ── */}
+              <div className="rp-summary">
+                <div className="rp-metric">
+                  <div className="rp-metric__label">Total Users</div>
+                  <div className="rp-metric__value">{(summary.totalUsers ?? 0).toLocaleString()}</div>
+                </div>
+                <div className="rp-metric">
+                  <div className="rp-metric__label">Total Posts</div>
+                  <div className="rp-metric__value">{(summary.totalPosts ?? 0).toLocaleString()}</div>
+                </div>
+                <div className="rp-metric rp-metric--blue">
+                  <div className="rp-metric__label">Total Pickups</div>
+                  <div className="rp-metric__value">{(summary.totalPickups ?? 0).toLocaleString()}</div>
+                </div>
+                <div className="rp-metric rp-metric--green">
+                  <div className="rp-metric__label">Total Earnings</div>
+                  <div className="rp-metric__value">Rs {(summary.totalEarnings ?? 0).toLocaleString()}</div>
+                </div>
+              </div>
+
+              {/* ── Table card ── */}
+              <div className="rp-table-card">
+                <div className="rp-table-meta">
+                  <span className="rp-table-meta__info">
+                    {rows.length} row{rows.length !== 1 ? "s" : ""}
+                  </span>
+                  <span className="rp-revenue">Rs {totalRevenue.toLocaleString()} total revenue</span>
+                </div>
+
+                <div className="rp-table-wrap">
+                  <table className="rp-table">
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>User</th>
+                        <th>Type</th>
+                        <th>Qty</th>
+                        <th>Price</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.length === 0 ? (
+                        <tr className="rp-empty"><td colSpan={6}>No report data found.</td></tr>
+                      ) : rows.map((r) => (
+                        <tr key={r.id ?? r._id ?? Math.random()}>
+                          <td><span className="rp-mono">{r.date ? new Date(r.date).toLocaleDateString() : "—"}</span></td>
+                          <td>{r.user ?? "—"}</td>
+                          <td>{r.wasteType ?? "—"}</td>
+                          <td><span className="rp-mono">{r.quantity ?? "—"}</span></td>
+                          <td><span className="rp-price">Rs {r.price ?? 0}</span></td>
+                          <td><span className={statusClass(r.status)}>{r.status ?? "—"}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </main>
     </div>
   );
 }
-
-const button: React.CSSProperties = { padding: "8px 12px", borderRadius: 6, background: "#0b6efd", color: "#fff", border: "none" };
-const buttonAlt: React.CSSProperties = { padding: "8px 12px", borderRadius: 6, background: "#f1f1f1", border: "none" };
-const summaryCard: React.CSSProperties = { background: "#fff", padding: 12, borderRadius: 8, boxShadow: "0 1px 6px rgba(0,0,0,0.04)", minWidth: 140 };
-const th: React.CSSProperties = { textAlign: "left", padding: "8px 10px", borderBottom: "1px solid #eee" };
-const td: React.CSSProperties = { padding: "8px 10px", borderBottom: "1px solid #f5f5f5" };

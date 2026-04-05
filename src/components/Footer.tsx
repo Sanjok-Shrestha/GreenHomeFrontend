@@ -59,8 +59,8 @@ export default function Footer() {
             <div className="fo-heading">Help & Resources</div>
             <ul className="fo-list">
               <li><Link to="/faq" className="fo-link">FAQ</Link></li>
-              <li><Link to="/tips" className="fo-link">Recycling tips</Link></li>
-              <li><Link to="/contact" className="fo-link">Contact support</Link></li>
+              <li><Link to="/recycling-tips" className="fo-link">Recycling tips</Link></li>
+              <li><Link to="/support" className="fo-link">Contact support</Link></li>
             </ul>
           </div>
         </div>

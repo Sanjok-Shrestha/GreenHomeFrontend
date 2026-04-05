@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
+import Sidebar from "../components/Sidebar";
 
 type Waste = {
   _id: string;
@@ -26,7 +27,7 @@ export default function MyPickups(): React.JSX.Element {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get("/api/waste/my-posts");
+      const res = await api.get("/waste/my-posts");
       const data = res.data?.data ?? res.data;
       setItems(Array.isArray(data) ? data : []);
     } catch (err: any) {
@@ -44,9 +45,7 @@ export default function MyPickups(): React.JSX.Element {
   const startSchedule = (id: string, current?: string | null) => {
     setEditingId(id);
     if (current) {
-      // convert to local datetime-local value
       const d = new Date(current);
-      // datetime-local expects "YYYY-MM-DDTHH:mm"
       const tzOffset = d.getTimezoneOffset() * 60000;
       const localISO = new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
       setDateValue(localISO);
@@ -66,7 +65,7 @@ export default function MyPickups(): React.JSX.Element {
       return;
     }
     try {
-      await api.put(`/api/waste/schedule/${id}`, { pickupDate: dateValue });
+      await api.put(`/waste/schedule/${id}`, { pickupDate: dateValue });
       await fetchItems();
       setEditingId(null);
       setDateValue("");
@@ -78,14 +77,6 @@ export default function MyPickups(): React.JSX.Element {
       setEditingId(null);
       setDateValue("");
     }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    localStorage.removeItem("role");
-    navigate("/login", { replace: true });
   };
 
   const showToast = (text: string, ttl = 900) => {
@@ -104,41 +95,31 @@ export default function MyPickups(): React.JSX.Element {
     });
     document.body.appendChild(n);
     setTimeout(() => {
-      try { document.body.removeChild(n); } catch {}
+      try {
+        document.body.removeChild(n);
+      } catch {}
     }, ttl);
   };
 
   return (
     <div style={pageStyles.root}>
-      <aside style={pageStyles.sidebar} aria-label="Main navigation">
-        <div style={pageStyles.brand}>
-          <div style={pageStyles.brandIcon}>🏡</div>
-          <div style={pageStyles.brandText}>GreenHome</div>
-        </div>
-
-        <nav style={pageStyles.nav}>
-          <button style={pageStyles.navButton} onClick={() => navigate("/dashboard")}>📊 Dashboard</button>
-          <button style={{ ...pageStyles.navButton, ...pageStyles.navButtonActive }} onClick={() => navigate("/pickups")}>🚚 My Pickups</button>
-          <button style={pageStyles.navButton} onClick={() => navigate("/post-waste")}>♻️ Post Waste</button>
-          <button style={pageStyles.navButton} onClick={() => navigate("/rewards")}>🎁 Rewards</button>
-          <button style={pageStyles.navButton} onClick={() => navigate("/profile")}>👤 Profile</button>
-        </nav>
-
-        <div style={{ marginTop: "auto", padding: 12 }}>
-          <button style={pageStyles.logoutButton} onClick={handleLogout}>🚪 Logout</button>
-        </div>
-      </aside>
-
+      <Sidebar />
       <main style={pageStyles.main}>
         <header style={pageStyles.header}>
           <div>
-            <h2 style={{ margin: 0, fontSize: 20 }}>My Pickups</h2>
-            <div style={{ color: "#666", marginTop: 6, fontSize: 13 }}>Manage your posted waste and schedule pickups</div>
+            <h2 style={{ margin: 0, fontSize: 20 }}>Pickups Status</h2>
+            <div style={{ color: "#666", marginTop: 6, fontSize: 13 }}>
+              Manage your posted waste and schedule pickups
+            </div>
           </div>
 
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <Link to="/post-waste" style={pageStyles.postButton}>+ Post waste</Link>
-            <button onClick={() => fetchItems()} style={pageStyles.refreshButton}>Refresh</button>
+            <Link to="/post-waste" style={pageStyles.postButton}>
+              + Post waste
+            </Link>
+            <button onClick={() => fetchItems()} style={pageStyles.refreshButton}>
+              Refresh
+            </button>
           </div>
         </header>
 
@@ -162,16 +143,14 @@ export default function MyPickups(): React.JSX.Element {
             <div style={{ maxWidth: 1100, margin: "0 auto", display: "flex", flexDirection: "column", gap: 8 }}>
               {items.map((w) => (
                 <div key={w._id} style={cardConstrained}>
-                  {/* thumbnail */}
                   <div style={{ width: 56, height: 44, flex: "0 0 56px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     {w.imageUrl ? (
-                      <img src={ensureFullUrl(w.imageUrl)} alt="thumb" style={{ width: 56, height: 44, objectFit: "cover", borderRadius: 6 }} />
+                      <Thumbnail imageUrl={w.imageUrl} size={{ w: 56, h: 44 }} />
                     ) : (
                       <div style={{ width: 56, height: 44, background: "#f1f1f1", borderRadius: 6 }} />
                     )}
                   </div>
 
-                  {/* info + actions */}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                       <div style={{ overflow: "hidden" }}>
@@ -190,22 +169,25 @@ export default function MyPickups(): React.JSX.Element {
                     </div>
 
                     <div style={{ marginTop: 8, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                      <Link to={`/track/${w._id}`} style={linkTiny}>View</Link>
+                      <Link to={`/track/${w._id}`} style={linkTiny}>
+                        View
+                      </Link>
 
                       {editingId === w._id ? (
                         <>
-                          <input
-                            type="datetime-local"
-                            value={dateValue}
-                            onChange={(e) => setDateValue(e.target.value)}
-                            style={inputTiny}
-                          />
-                          <button onClick={() => saveSchedule(w._id)} style={buttonTinyPrimary}>Save</button>
-                          <button onClick={cancelEdit} style={buttonTiny}>Cancel</button>
+                          <input type="datetime-local" value={dateValue} onChange={(e) => setDateValue(e.target.value)} style={inputTiny} />
+                          <button onClick={() => saveSchedule(w._id)} style={buttonTinyPrimary}>
+                            Save
+                          </button>
+                          <button onClick={cancelEdit} style={buttonTiny}>
+                            Cancel
+                          </button>
                         </>
                       ) : (
                         <>
-                          <button onClick={() => startSchedule(w._id, w.pickupDate ?? null)} style={buttonTiny}>Schedule</button>
+                          <button onClick={() => startSchedule(w._id, w.pickupDate ?? null)} style={buttonTiny}>
+                            Schedule
+                          </button>
 
                           <button
                             onClick={() => {
@@ -218,8 +200,9 @@ export default function MyPickups(): React.JSX.Element {
                             Copy
                           </button>
 
-                          {/* post similar / quick create */}
-                          <Link to="/post-waste" style={buttonTinyLink}>Post similar</Link>
+                          <Link to="/post-waste" style={buttonTinyLink}>
+                            Post similar
+                          </Link>
                         </>
                       )}
                     </div>
@@ -234,15 +217,201 @@ export default function MyPickups(): React.JSX.Element {
   );
 }
 
-/* helper to ensure uploads path becomes absolute when served from backend */
-function ensureFullUrl(url?: string | null) {
-  if (!url) return "";
-  if (url.startsWith("http://") || url.startsWith("https://")) return url;
-  const base = (window as any).__API_BASE__ || "";
-  return `${base}${url}`;
+/* ------------------- Thumbnail (defensive, avoids duplicate prefixes) ------------------- */
+function Thumbnail({ imageUrl, size = { w: 56, h: 44 } }: { imageUrl?: string | null; size?: { w: number; h: number } }) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (!imageUrl) return;
+    let mounted = true;
+    let objectUrl: string | null = null;
+
+    // Get axios baseURL (likely "http://localhost:5000/api")
+    const apiBase = (api.defaults && (api.defaults.baseURL as string)) || "";
+    let apiBaseOrigin = "";
+    let apiBasePath = "";
+    try {
+      if (apiBase && /^https?:\/\//i.test(apiBase)) {
+        const u = new URL(apiBase);
+        apiBaseOrigin = u.origin; // e.g. "http://localhost:5000"
+        apiBasePath = u.pathname.replace(/\/+$/, ""); // e.g. "/api" or ""
+      } else {
+        apiBaseOrigin = window.location.origin;
+        apiBasePath = apiBase ? apiBase.replace(/\/+$/, "") : "";
+      }
+    } catch {
+      apiBaseOrigin = window.location.origin;
+      apiBasePath = "";
+    }
+
+    const origin = window.location.origin;
+    const raw = String(imageUrl).trim();
+
+    // Build candidates (ordered, safe, no blind concatenation)
+    const candidates: string[] = [];
+
+    if (/^https?:\/\//i.test(raw)) {
+      candidates.push(raw);
+    } else {
+      const path = raw.startsWith("/") ? raw : "/" + raw;
+      if (apiBasePath && path.startsWith(apiBasePath)) {
+        // path already contains the api prefix (e.g. "/api/uploads/...")
+        candidates.push(path);
+      } else {
+        if (apiBase) candidates.push(apiBase + path); // absolute
+        if (apiBase) candidates.push(apiBase.replace(/\/api$/, "") + path); // try host without /api
+        candidates.push(path); // relative
+      }
+
+      // try common upload locations based on filename
+      const parts = path.split("/");
+      const filename = parts[parts.length - 1] || "";
+      if (filename) {
+        candidates.push(`/uploads/${filename}`);
+        candidates.push(`/uploads/images/${filename}`);
+        candidates.push(`/${filename}`);
+      }
+    }
+
+    // dedupe & normalize multiple slashes for keying (preserve original candidate strings)
+    const uniq: string[] = [];
+    const seen = new Set<string>();
+    for (const c of candidates) {
+      const key = c.replace(/\/+/g, "/");
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniq.push(c);
+      }
+    }
+
+    console.debug("[Thumbnail] candidates for", imageUrl, uniq);
+
+    // Convert a candidate into a path usable with api.get (removes apiBasePath so axios won't double prefix)
+    function pathForApi(candidate: string): string | null {
+      try {
+        if (/^https?:\/\//i.test(candidate)) {
+          const u = new URL(candidate);
+          if (u.origin === apiBaseOrigin) {
+            let p = u.pathname + (u.search || "");
+            if (apiBasePath && p.startsWith(apiBasePath)) p = p.slice(apiBasePath.length) || "/";
+            if (!p.startsWith("/")) p = "/" + p;
+            return p;
+          }
+          // cross-origin absolute -> cannot use api.get
+          return null;
+        } else {
+          let p = candidate.startsWith("/") ? candidate : "/" + candidate;
+          if (apiBasePath && p.startsWith(apiBasePath)) {
+            p = p.slice(apiBasePath.length) || "/";
+          }
+          if (!p.startsWith("/")) p = "/" + p;
+          return p;
+        }
+      } catch {
+        return null;
+      }
+    }
+
+    async function tryCandidates() {
+      for (const cand of uniq) {
+        if (!mounted) return;
+        try {
+          if (/^https?:\/\//i.test(cand)) {
+            const candUrl = new URL(cand);
+            let apiOrigin = origin;
+            try {
+              if (api.defaults && typeof api.defaults.baseURL === "string") apiOrigin = new URL(api.defaults.baseURL).origin;
+              else if (apiBase) apiOrigin = new URL(apiBase).origin;
+            } catch {}
+            if (candUrl.origin === apiOrigin) {
+              const p = pathForApi(cand);
+              if (!p) continue;
+              try {
+                const resp = await api.get(p, { responseType: "blob" });
+                objectUrl = URL.createObjectURL(resp.data);
+                if (mounted) {
+                  setSrc(objectUrl);
+                  console.debug("[Thumbnail] loaded blob (same-origin absolute) from", cand);
+                  return;
+                }
+              } catch (err) {
+                console.debug("[Thumbnail] api.get for same-origin absolute failed", cand, err);
+                continue;
+              }
+            } else {
+              if (mounted) {
+                setSrc(cand);
+                console.debug("[Thumbnail] using external absolute URL", cand);
+                return;
+              }
+            }
+          } else {
+            const p = pathForApi(cand);
+            if (p === null) {
+              continue;
+            }
+            try {
+              const resp = await api.get(p, { responseType: "blob" });
+              objectUrl = URL.createObjectURL(resp.data);
+              if (mounted) {
+                setSrc(objectUrl);
+                console.debug("[Thumbnail] fetched blob for candidate", cand, "via api.get", p);
+                return;
+              }
+            } catch (err) {
+              console.debug("[Thumbnail] relative candidate failed", cand, err);
+              continue;
+            }
+          }
+        } catch (outerErr) {
+          console.debug("[Thumbnail] candidate outer error", cand, outerErr);
+          continue;
+        }
+      }
+
+      if (mounted) {
+        setError(true);
+        console.debug("[Thumbnail] all candidates failed for", imageUrl);
+      }
+    }
+
+    tryCandidates();
+
+    return () => {
+      mounted = false;
+      if (objectUrl) {
+        try {
+          URL.revokeObjectURL(objectUrl);
+        } catch {}
+      }
+    };
+  }, [imageUrl]);
+
+  if (error || !src) {
+    return (
+      <div
+        style={{
+          width: size.w,
+          height: size.h,
+          background: "#f1f1f1",
+          borderRadius: 6,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#869089",
+          fontSize: 12,
+        }}
+      >
+        {error ? "Image unavailable" : "No image"}
+      </div>
+    );
+  }
+
+  return <img src={src} alt="thumb" style={{ width: size.w, height: size.h, objectFit: "cover", borderRadius: 6 }} onError={() => setError(true)} />;
 }
 
-/* styles: constrained card so it doesn't look long */
+/* ------------------- Styles & helpers ------------------- */
 const cardConstrained: React.CSSProperties = {
   display: "flex",
   gap: 12,
@@ -302,7 +471,6 @@ const buttonTinyLink: React.CSSProperties = {
   fontSize: 12,
 };
 
-/* page layout styles */
 const pageStyles: { [k: string]: React.CSSProperties } = {
   root: { display: "flex", minHeight: "100vh", fontFamily: "Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial", background: "#f5f7fb" },
   sidebar: { width: 240, background: "linear-gradient(180deg,#16382f,#123023)", color: "#fff", display: "flex", flexDirection: "column", padding: 18, boxShadow: "2px 0 12px rgba(0,0,0,0.06)" },

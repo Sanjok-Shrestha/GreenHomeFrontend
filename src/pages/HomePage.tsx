@@ -5,115 +5,776 @@ import Footer from "../components/Footer";
 
 /* --------------------------- CSS --------------------------- */
 const css = `
-:root{
-  --gh-bg: #f3f7f4;
-  --gh-surface: #fff;
-  --gh-primary: #1db954;
-  --gh-primary-600: #0ea158;
-  --gh-accent: #0b6efd;
-  --gh-text: #0b2a1a;
-  --gh-muted: #577960;
-  --radius-lg: 12px;
-  --radius-md: 10px;
-  --space-lg: 28px;
-  /* reduced container width to give more room for content and reduce empty side space */
-  --container-width: 1000px;
-  --transition-fast: 180ms;
-  --focus-ring: 3px solid rgba(29,185,84,0.16);
-  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,700;0,9..144,900;1,9..144,400;1,9..144,700&family=DM+Sans:wght@400;500;700&display=swap');
+
+:root {
+  /* Core palette — deep forest to bright lime */
+  --gh-bg:          #ffffff; /* changed to white */
+  --gh-surface:     #ffffff;
+  --gh-surface-2:   #f7faf4;
+  --gh-primary:     #2d8c4e;
+  --gh-primary-lt:  #3dab62;
+  --gh-accent:      #b5e34d;
+  --gh-accent-dk:   #8cb820;
+  --gh-ink:         #111c14;
+  --gh-muted:       #5a6e52;
+  --gh-border:      rgba(45,140,78,0.12);
+
+  /* Typography */
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body:    'DM Sans', system-ui, sans-serif;
+
+  /* Radii */
+  --r-sm: 8px;
+  --r-md: 14px;
+  --r-lg: 22px;
+  --r-xl: 32px;
+
+  /* Shadows */
+  --shadow-card:   0 2px 4px rgba(17,28,20,0.04), 0 8px 24px rgba(17,28,20,0.06);
+  --shadow-lift:   0 12px 40px rgba(17,28,20,0.12), 0 2px 8px rgba(17,28,20,0.06);
+  --shadow-glow:   0 0 0 3px rgba(181,227,77,0.35);
+
+  /* Motion */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out:    cubic-bezier(0.22, 1, 0.36, 1);
+  --t-fast: 160ms;
+  --t-med:  280ms;
+
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Page */
-.gh-page { min-height:100vh; display:flex; flex-direction:column; background:var(--gh-bg); color:var(--gh-text); }
-.gh-main { flex:1; padding:var(--space-lg); max-width:var(--container-width); margin:0 auto; width:100%; }
+/* ─── Reset helpers ─── */
+*, *::before, *::after { box-sizing: border-box; }
+:focus { outline: none; }
+:focus-visible { box-shadow: var(--shadow-glow); border-radius: var(--r-sm); }
 
-/* Hero */
-/* reduced aside width from 320px -> 260px and tightened gap */
-.gh-hero { display:grid; grid-template-columns: 1fr 260px; gap:16px; align-items:start; padding:18px; margin-bottom:24px; }
-.gh-hero-title { font-size:2.25rem; margin:0 0 8px; color:#0a3b20; }
-.gh-hero-subtitle { margin:0; color:#3b4f3a; line-height:1.6; }
+/* ─── Page shell ─── */
+.gh-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--gh-bg);
+  color: var(--gh-ink);
+}
 
-/* Row/controls */
-.gh-row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-top:16px; }
-.gh-btn { display:inline-flex; align-items:center; gap:10px; padding:10px 16px; border-radius:10px; font-weight:700; text-decoration:none; border:none; cursor:pointer; transition:transform var(--transition-fast), box-shadow var(--transition-fast); position:relative; overflow:hidden; }
-.gh-btn:active{ transform:translateY(1px); }
-.gh-btn-primary { background:linear-gradient(90deg,var(--gh-primary),var(--gh-primary-600)); color:#fff; box-shadow: 0 6px 14px rgba(13,139,79,0.12); }
-.gh-btn-primary:hover{ transform:translateY(-3px); box-shadow:0 18px 36px rgba(13,139,79,0.12); }
-.gh-btn-primary:focus{ outline:none; box-shadow:var(--focus-ring); }
-.gh-btn-ghost { background:transparent; color:var(--gh-primary); border:1px solid rgba(29,185,84,0.12); }
-.gh-btn-ghost:hover{ background:rgba(29,185,84,0.04); transform:translateY(-2px); }
+/* rest of CSS unchanged... */
+
+/* ─── Main container ─── */
+.gh-main {
+  flex: 1;
+  padding: 32px 28px;
+  max-width: 1040px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* ─── Hero ─── */
+.gh-hero {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 24px;
+  align-items: start;
+  margin-bottom: 56px;
+  position: relative;
+}
+
+/* Decorative radial behind hero text */
+.gh-hero::before {
+  content: '';
+  position: absolute;
+  top: -24px;
+  left: -40px;
+  width: 340px;
+  height: 340px;
+  background: radial-gradient(ellipse at 30% 40%, rgba(181,227,77,0.18) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.gh-hero > * { position: relative; z-index: 1; }
+
+.gh-hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gh-primary);
+  background: rgba(45,140,78,0.09);
+  padding: 5px 12px;
+  border-radius: 100px;
+  margin-bottom: 14px;
+  border: 1px solid rgba(45,140,78,0.18);
+}
+
+.gh-hero-title {
+  font-family: var(--font-display);
+  font-size: clamp(2.4rem, 5vw, 3.4rem);
+  font-weight: 900;
+  line-height: 1.08;
+  margin: 0 0 16px;
+  color: var(--gh-ink);
+  letter-spacing: -0.02em;
+}
+
+.gh-hero-title em {
+  font-style: italic;
+  color: var(--gh-primary);
+  font-weight: 700;
+}
+
+.gh-hero-subtitle {
+  margin: 0;
+  font-size: 1.05rem;
+  color: var(--gh-muted);
+  line-height: 1.7;
+  max-width: 480px;
+}
+
+/* ─── Row / controls ─── */
+.gh-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 24px;
+}
+
+/* ─── Buttons ─── */
+.gh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-radius: var(--r-md);
+  font-family: var(--font-body);
+  font-size: 0.92rem;
+  font-weight: 700;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition:
+    transform var(--t-fast) var(--ease-spring),
+    box-shadow var(--t-med) var(--ease-out),
+    background var(--t-fast);
+  white-space: nowrap;
+}
+
+.gh-btn:active { transform: scale(0.97); }
+
+.gh-btn-primary {
+  background: var(--gh-primary);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(45,140,78,0.30), inset 0 1px 0 rgba(255,255,255,0.15);
+}
+
+.gh-btn-primary:hover {
+  background: var(--gh-primary-lt);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(45,140,78,0.28), inset 0 1px 0 rgba(255,255,255,0.15);
+}
+
+.gh-btn-primary:focus-visible { box-shadow: var(--shadow-glow); }
+
+.gh-btn-ghost {
+  background: transparent;
+  color: var(--gh-primary);
+  border: 1.5px solid rgba(45,140,78,0.25);
+}
+
+.gh-btn-ghost:hover {
+  background: rgba(45,140,78,0.06);
+  border-color: var(--gh-primary);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(45,140,78,0.10);
+}
 
 /* Ripple */
-.ripple { position:absolute; border-radius:50%; transform:scale(0); background:rgba(255,255,255,0.35); pointer-events:none; }
+.ripple {
+  position: absolute;
+  border-radius: 50%;
+  transform: scale(0);
+  background: rgba(255,255,255,0.30);
+  pointer-events: none;
+  animation: ripple-anim 600ms linear forwards;
+}
 
-/* Search */
-.gh-search { display:flex; align-items:center; background:var(--gh-surface); border-radius:var(--radius-md); overflow:hidden; box-shadow:0 6px 18px rgba(14,40,18,0.03); flex:1; min-width:220px; transition:box-shadow var(--transition-fast), transform var(--transition-fast); }
-.gh-search:focus-within { box-shadow:0 20px 60px rgba(11,107,58,0.06); transform:translateY(-2px); }
-.gh-search input { border:none; padding:12px 14px; outline:none; flex:1; background:transparent; font-size:0.97rem; }
-.gh-search input::placeholder { color:#8f9a89; }
-.gh-search button { background:var(--gh-accent); color:#fff; border:none; padding:10px 14px; cursor:pointer; }
+@keyframes ripple-anim {
+  to { transform: scale(2.5); opacity: 0; }
+}
 
-/* Suggestions */
-.gh-suggestions { position:relative; }
-.gh-suggestions-list { position:absolute; top:calc(100% + 8px); left:0; right:0; background:var(--gh-surface); border-radius:8px; box-shadow:0 10px 30px rgba(14,40,18,0.08); z-index:30; max-height:260px; overflow:auto; }
-.gh-suggestion { padding:10px 12px; cursor:pointer; border-bottom:1px solid rgba(11,40,18,0.04); }
+/* ─── Search ─── */
+.gh-search {
+  display: flex;
+  align-items: center;
+  background: var(--gh-surface);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+  border: 1.5px solid var(--gh-border);
+  flex: 1;
+  min-width: 220px;
+  transition:
+    box-shadow var(--t-med) var(--ease-out),
+    border-color var(--t-fast),
+    transform var(--t-med) var(--ease-out);
+}
+
+.gh-search:focus-within {
+  box-shadow: var(--shadow-lift);
+  border-color: rgba(45,140,78,0.35);
+  transform: translateY(-2px);
+}
+
+.gh-search input {
+  border: none;
+  padding: 12px 16px;
+  outline: none;
+  flex: 1;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 0.93rem;
+  color: var(--gh-ink);
+}
+
+.gh-search input::placeholder { color: #97a893; }
+
+.gh-search button {
+  background: var(--gh-ink);
+  color: var(--gh-accent);
+  border: none;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+
+.gh-search button:hover { background: var(--gh-primary); color: #fff; }
+
+/* ─── Suggestions ─── */
+.gh-suggestions { position: relative; }
+
+.gh-suggestions-list {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  background: var(--gh-surface);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lift);
+  border: 1px solid var(--gh-border);
+  z-index: 30;
+  max-height: 260px;
+  overflow: auto;
+  animation: dropdown-in var(--t-fast) var(--ease-out);
+}
+
+@keyframes dropdown-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.gh-suggestion {
+  padding: 11px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(17,28,20,0.05);
+  font-size: 0.91rem;
+  color: var(--gh-muted);
+  transition: background var(--t-fast), color var(--t-fast), padding-left var(--t-fast);
+}
+
 .gh-suggestion:last-child { border-bottom: none; }
-.gh-suggestion:hover, .gh-suggestion:focus { background:rgba(11,40,18,0.02); outline:none; }
 
-/* Trust list */
-.gh-trust-list { margin-top:14px; list-style:disc; padding-left:20px; color:var(--gh-muted); line-height:1.6; }
+.gh-suggestion:hover,
+.gh-suggestion:focus {
+  background: rgba(45,140,78,0.05);
+  color: var(--gh-primary);
+  padding-left: 20px;
+  outline: none;
+}
 
-/* Impact card */
-.gh-impact-card { width:100%; background:linear-gradient(180deg,#ffffff,#f7fff7); padding:18px; border-radius:var(--radius-lg); box-shadow:0 10px 30px rgba(14,40,18,0.06); transition:transform var(--transition-fast), box-shadow var(--transition-fast); }
-.gh-impact-card:hover{ transform:translateY(-6px); box-shadow:0 30px 60px rgba(14,40,18,0.10); }
-.gh-impact-title{ font-weight:800; margin-bottom:12px; color:#0b3e23; }
-.gh-impact-grid{ display:flex; gap:10px; justify-content:space-between; align-items:center; }
-.gh-impact-item{ text-align:center; min-width:80px; }
-.gh-impact-value{ font-size:1.125rem; font-weight:800; color:#0b3e23; }
-.gh-impact-label{ font-size:0.85rem; color:var(--gh-muted); }
-.gh-small-link{ color:var(--gh-accent); text-decoration:none; font-weight:700; }
+/* ─── Trust pills ─── */
+.gh-trust-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 20px 0 0;
+}
 
-/* Categories */
-.gh-section-title{ font-size:1.125rem; margin:24px 0 8px; color:#0b3e23; }
-.gh-cat-grid{ display:grid; grid-template-columns: repeat(4,1fr); gap:12px; }
-.gh-cat { background:var(--gh-surface); padding:14px; border-radius:var(--radius-lg); display:flex; flex-direction:column; gap:8px; align-items:flex-start; box-shadow:0 6px 18px rgba(14,40,18,0.03); transition: transform var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast); text-decoration:none; color:inherit; opacity:0; transform:translateY(10px); }
-.gh-cat.in-view { opacity:1; transform:none; }
-.gh-cat:hover, .gh-cat:focus{ transform: translateY(-8px); box-shadow:0 24px 48px rgba(14,40,18,0.06); outline:none; box-shadow:var(--focus-ring); }
-.gh-cat-emoji{ font-size:24px; }
-.gh-cat-label{ font-weight:700; }
-.gh-cat-action{ margin-top:auto; color:var(--gh-accent); font-weight:700; }
+.gh-trust-list li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--gh-muted);
+  background: var(--gh-surface);
+  padding: 5px 12px;
+  border-radius: 100px;
+  border: 1px solid var(--gh-border);
+}
 
-/* Steps */
-.gh-steps{ display:grid; grid-template-columns: repeat(4,1fr); gap:12px; margin-top:12px; }
-.gh-step{ background:var(--gh-surface); padding:18px; border-radius:var(--radius-lg); text-align:center; box-shadow:0 6px 18px rgba(14,40,18,0.03); transition: transform var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast); opacity:0; transform:translateY(12px); }
-.gh-step.in-view{ opacity:1; transform:none; }
-.gh-step:hover, .gh-step:focus{ transform: translateY(-6px); box-shadow:0 24px 48px rgba(14,40,18,0.06); outline:none; }
-.gh-step-icon{ font-size:28px; margin-bottom:8px; }
-.gh-step-title{ margin:8px 0 6px; font-weight:700; }
-.gh-step-text{ margin:0; font-size:13px; color:var(--gh-muted); }
+.gh-trust-list li::before {
+  content: '✓';
+  color: var(--gh-primary);
+  font-weight: 900;
+}
 
-/* CTA */
-.gh-get-started{ margin-top:22px; padding:18px; background:linear-gradient(180deg,#e9f9ee,#f3fbf6); border-radius:var(--radius-lg); display:flex; justify-content:space-between; align-items:center; gap:12px; box-shadow:0 6px 18px rgba(14,40,18,0.03); }
-.gh-cta{ display:flex; gap:12px; align-items:center; }
+/* ─── Impact card ─── */
+.gh-impact-card {
+  background: var(--gh-ink);
+  color: #fff;
+  padding: 22px;
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lift), 0 0 0 1px rgba(255,255,255,0.06) inset;
+  transition: transform var(--t-med) var(--ease-spring), box-shadow var(--t-med);
+  position: relative;
+  overflow: hidden;
+}
 
-/* Modal */
-.gh-modal-overlay{ position:fixed; inset:0; background:rgba(7,11,7,0.45); display:flex; align-items:center; justify-content:center; z-index:60; }
-.gh-modal{ background:var(--gh-surface); border-radius:12px; padding:18px; width:min(680px, 92%); box-shadow:0 30px 80px rgba(7,11,7,0.6); max-height:90vh; overflow:auto; }
-.gh-modal h3{ margin:0 0 8px; }
-.gh-modal .row{ display:flex; gap:10px; margin-top:12px; }
-.gh-modal input, .gh-modal textarea, .gh-modal select{ width:100%; padding:10px; border-radius:8px; border:1px solid rgba(11,40,18,0.06); outline:none; font-size:0.95rem; }
-.gh-modal textarea{ min-height:90px; resize:vertical; }
+.gh-impact-card::before {
+  content: '';
+  position: absolute;
+  bottom: -30px;
+  right: -30px;
+  width: 120px;
+  height: 120px;
+  background: var(--gh-accent);
+  border-radius: 50%;
+  opacity: 0.12;
+  pointer-events: none;
+}
 
-/* Responsive */
-@media (max-width:980px){ .gh-hero { grid-template-columns:1fr; } .gh-cat-grid{ grid-template-columns:repeat(2,1fr); } .gh-steps{ grid-template-columns:repeat(2,1fr); } }
-@media (max-width:640px){ .gh-main{ padding:16px; } .gh-cat-grid{ grid-template-columns:1fr; } .gh-steps{ grid-template-columns:1fr; } }
+.gh-impact-card:hover {
+  transform: translateY(-6px) rotate(-0.5deg);
+  box-shadow: 0 24px 60px rgba(17,28,20,0.22);
+}
 
-/* Focus */
-:focus { outline:none; }
-:focus-visible { box-shadow:var(--focus-ring); border-radius:8px; }
+.gh-impact-title {
+  font-weight: 700;
+  margin-bottom: 18px;
+  color: rgba(255,255,255,0.55);
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  font-size: 0.70rem;
+}
 
-/* Reduced motion */
-@media (prefers-reduced-motion: reduce){ *{ transition:none!important; animation:none!important; } }
+.gh-impact-grid {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.gh-impact-item { text-align: center; }
+
+.gh-impact-value {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 900;
+  color: var(--gh-accent);
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.gh-impact-label {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.50);
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+.gh-impact-divider {
+  width: 1px;
+  height: 40px;
+  background: rgba(255,255,255,0.10);
+  align-self: center;
+}
+
+.gh-small-link {
+  color: var(--gh-accent);
+  text-decoration: none;
+  font-size: 0.83rem;
+  font-weight: 700;
+  transition: opacity var(--t-fast);
+}
+
+.gh-small-link:hover { opacity: 0.75; }
+
+/* ─── Section headers ─── */
+.gh-section-header {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  margin: 0 0 16px;
+}
+
+.gh-section-title {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--gh-ink);
+  margin: 0;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.gh-section-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--gh-border) 0%, transparent 100%);
+}
+
+/* ─── Category grid ─── */
+.gh-cat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 48px;
+}
+
+.gh-cat {
+  background: var(--gh-surface);
+  padding: 20px;
+  border-radius: var(--r-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+  box-shadow: var(--shadow-card);
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  opacity: 0;
+  translate: 0 16px;
+  transition:
+    transform var(--t-med) var(--ease-spring),
+    box-shadow var(--t-med) var(--ease-out),
+    border-color var(--t-fast),
+    opacity 400ms var(--ease-out),
+    translate 400ms var(--ease-out);
+}
+
+.gh-cat.in-view { opacity: 1; translate: 0 0; }
+
+.gh-cat:nth-child(1) { transition-delay: 0ms; }
+.gh-cat:nth-child(2) { transition-delay: 60ms; }
+.gh-cat:nth-child(3) { transition-delay: 120ms; }
+.gh-cat:nth-child(4) { transition-delay: 180ms; }
+
+.gh-cat:hover,
+.gh-cat:focus {
+  transform: translateY(-7px);
+  box-shadow: var(--shadow-lift);
+  border-color: rgba(45,140,78,0.22);
+  outline: none;
+}
+
+/* Modified: center the emoji horizontally while keeping label/action alignment */
+.gh-cat-emoji {
+  display: block;
+  font-size: 32px;
+  line-height: 1;
+  margin: 0 auto 12px; /* centers the emoji horizontally and gives bottom spacing */
+}
+
+.gh-cat-label {
+  font-weight: 700;
+  font-size: 0.93rem;
+  color: var(--gh-ink);
+}
+
+/* gh-cat-action styles left in case you re-add actions later */
+.gh-cat-action {
+  margin-top: 8px;
+  font-size: 0.80rem;
+  font-weight: 700;
+  color: var(--gh-primary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: gap var(--t-fast);
+}
+
+.gh-cat:hover .gh-cat-action,
+.gh-cat:focus .gh-cat-action { gap: 8px; }
+
+/* ─── Steps ─── */
+.gh-steps {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 48px;
+  position: relative;
+}
+
+.gh-steps::before {
+  content: '';
+  position: absolute;
+  top: 38px;
+  left: calc(12.5% + 12px);
+  right: calc(12.5% + 12px);
+  height: 2px;
+  background: linear-gradient(90deg, var(--gh-accent), rgba(181,227,77,0.10));
+  z-index: 0;
+  pointer-events: none;
+}
+
+.gh-step {
+  background: var(--gh-surface);
+  padding: 22px 16px;
+  border-radius: var(--r-lg);
+  text-align: center;
+  box-shadow: var(--shadow-card);
+  position: relative;
+  z-index: 1;
+  opacity: 0;
+  translate: 0 14px;
+  transition:
+    transform var(--t-med) var(--ease-spring),
+    box-shadow var(--t-med) var(--ease-out),
+    opacity 400ms var(--ease-out),
+    translate 400ms var(--ease-out);
+}
+
+.gh-step.in-view { opacity: 1; translate: 0 0; }
+
+.gh-step:nth-child(1) { transition-delay: 0ms; }
+.gh-step:nth-child(2) { transition-delay: 80ms; }
+.gh-step:nth-child(3) { transition-delay: 160ms; }
+.gh-step:nth-child(4) { transition-delay: 240ms; }
+
+.gh-step:hover,
+.gh-step:focus {
+  transform: translateY(-6px);
+  box-shadow: var(--shadow-lift);
+  outline: none;
+}
+
+.gh-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--gh-accent);
+  color: var(--gh-ink);
+  font-size: 0.72rem;
+  font-weight: 900;
+  margin: 0 auto 10px;
+}
+
+.gh-step-icon {
+  font-size: 28px;
+  line-height: 1;
+  margin-bottom: 10px;
+  display: block;
+}
+
+.gh-step-title {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0 0 6px;
+  color: var(--gh-ink);
+}
+
+.gh-step-text {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--gh-muted);
+  line-height: 1.55;
+}
+
+/* ─── CTA banner ─── */
+.gh-get-started {
+  padding: 28px 32px;
+  background: linear-gradient(135deg, var(--gh-primary) 0%, #1a6e38 100%);
+  border-radius: var(--r-xl);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 10px 32px rgba(45,140,78,0.28);
+}
+
+.gh-get-started::after {
+  content: '♻';
+  position: absolute;
+  right: 140px;
+  top: 50%;
+  transform: translateY(-50%) rotate(15deg);
+  font-size: 120px;
+  opacity: 0.06;
+  pointer-events: none;
+  color: #fff;
+}
+
+.gh-get-started h3 {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  margin: 0;
+  color: #fff;
+}
+
+.gh-get-started p {
+  margin: 6px 0 0;
+  color: rgba(255,255,255,0.70);
+  font-size: 0.93rem;
+}
+
+.gh-cta { display: flex; gap: 12px; align-items: center; position: relative; z-index: 1; }
+
+.gh-btn-cta-light {
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  border: 1.5px solid rgba(255,255,255,0.30);
+  backdrop-filter: blur(8px);
+}
+
+.gh-btn-cta-light:hover {
+  background: rgba(255,255,255,0.22);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+}
+
+.gh-btn-cta-accent {
+  background: var(--gh-accent);
+  color: var(--gh-ink);
+  border: none;
+  box-shadow: 0 4px 14px rgba(181,227,77,0.35);
+}
+
+.gh-btn-cta-accent:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(181,227,77,0.45);
+  background: #c3ef5a;
+}
+
+/* ─── Modal ─── */
+.gh-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10,18,11,0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+  backdrop-filter: blur(4px);
+  animation: overlay-in 200ms var(--ease-out);
+}
+
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.gh-modal {
+  background: var(--gh-surface);
+  border-radius: var(--r-xl);
+  padding: 28px;
+  width: min(600px, 92%);
+  box-shadow: 0 40px 100px rgba(10,18,11,0.40);
+  max-height: 90vh;
+  overflow: auto;
+  animation: modal-in 280ms var(--ease-spring);
+}
+
+@keyframes modal-in {
+  from { opacity: 0; transform: scale(0.93) translateY(12px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.gh-modal h3 {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 900;
+  margin: 0 0 6px;
+  letter-spacing: -0.02em;
+}
+
+.gh-modal label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gh-muted);
+  margin-bottom: 6px;
+  margin-top: 16px;
+}
+
+.gh-modal input,
+.gh-modal textarea,
+.gh-modal select {
+  width: 100%;
+  padding: 11px 14px;
+  border-radius: var(--r-md);
+  border: 1.5px solid var(--gh-border);
+  outline: none;
+  font-family: var(--font-body);
+  font-size: 0.93rem;
+  color: var(--gh-ink);
+  background: var(--gh-surface-2);
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+
+.gh-modal input:focus,
+.gh-modal textarea:focus,
+.gh-modal select:focus {
+  border-color: var(--gh-primary);
+  box-shadow: 0 0 0 3px rgba(45,140,78,0.14);
+}
+
+.gh-modal textarea { min-height: 100px; resize: vertical; }
+
+.gh-modal-footer {
+  display: flex;
+  gap: 8px;
+  margin-top: 20px;
+  justify-content: flex-end;
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 900px) {
+  .gh-hero { grid-template-columns: 1fr; }
+  .gh-cat-grid { grid-template-columns: repeat(2, 1fr); }
+  .gh-steps { grid-template-columns: repeat(2, 1fr); }
+  .gh-steps::before { display: none; }
+  .gh-get-started { flex-direction: column; text-align: center; }
+  .gh-cta { justify-content: center; }
+}
+
+@media (max-width: 560px) {
+  .gh-main { padding: 20px 16px; }
+  .gh-cat-grid { grid-template-columns: 1fr; }
+  .gh-steps { grid-template-columns: 1fr; }
+  .gh-hero-title { font-size: 2rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
 `;
 
 /* --------------------------- Helpers --------------------------- */
@@ -127,7 +788,7 @@ function useCountUp(end: number, duration = 900) {
     startRef.current = performance.now();
     const step = (t: number) => {
       if (!startRef.current) startRef.current = t;
-      const elapsed = t - startRef.current;
+      const elapsed = t - startRef.current!;
       const progress = Math.min(1, elapsed / duration);
       setValue(Math.round(progress * end));
       if (progress < 1) rafRef.current = requestAnimationFrame(step);
@@ -179,29 +840,23 @@ function createRipple(e: React.MouseEvent<HTMLElement>) {
   span.style.left = `${x}px`;
   span.style.top = `${y}px`;
   target.appendChild(span);
-  requestAnimationFrame(() => {
-    span.style.transform = "scale(2)";
-    span.style.opacity = "0";
-  });
-  setTimeout(() => {
-    span.remove();
-  }, 600);
+  setTimeout(() => span.remove(), 700);
 }
 
 /* --------------------------- Data --------------------------- */
 
 const CATEGORIES = [
   { key: "plastic", label: "Plastic Bottles", emoji: "🧴" },
-  { key: "paper", label: "Paper & Cardboard", emoji: "📦" },
-  { key: "metal", label: "Metal Cans", emoji: "🥫" },
-  { key: "glass", label: "Glass Bottles", emoji: "🍾" },
+  { key: "paper",   label: "Paper & Cardboard", emoji: "📦" },
+  { key: "metal",   label: "Metal Cans", emoji: "🥫" },
+  { key: "glass",   label: "Glass Bottles", emoji: "🍾" },
 ];
 
 const STEPS = [
-  { icon: "📝", title: "Post an item", text: "Tell us what you're disposing of and upload a photo." },
-  { icon: "🧑‍🔧", title: "Collector accepts", text: "A nearby verified collector accepts the job." },
-  { icon: "🚚", title: "Track pickup", text: "Follow the collector on the map until collection is complete." },
-  { icon: "🏅", title: "Earn rewards", text: "Get points and certificates for recycling responsibly." },
+  { icon: "📝", num: 1, title: "Post an item", text: "Tell us what you're disposing of and upload a photo." },
+  { icon: "🧑‍🔧", num: 2, title: "Collector accepts", text: "A nearby verified collector accepts the job." },
+  { icon: "🚚", num: 3, title: "Track pickup", text: "Follow the collector on the map until collection is complete." },
+  { icon: "🏅", num: 4, title: "Earn rewards", text: "Get points and certificates for recycling responsibly." },
 ];
 
 const MockStats = { users: 1284, pickups: 3420, kgCollected: 78450 };
@@ -236,7 +891,7 @@ const HomePage: React.FC = () => {
       ...STEPS.map((s) => s.title),
       "recycling centers",
       "how to recycle plastic",
-      "points & rewards",
+      "points & certificates",
       "schedule pickup",
     ];
     const filtered = pool.filter((p) => p.toLowerCase().includes(q)).slice(0, 6);
@@ -254,9 +909,7 @@ const HomePage: React.FC = () => {
   };
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeModal();
-    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closeModal(); };
     if (modalOpen) document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [modalOpen]);
@@ -264,7 +917,7 @@ const HomePage: React.FC = () => {
   const onSelectSuggestion = (s: string) => {
     setQuery(s);
     setShowSuggestions(false);
-    window.location.assign(`/rewards?q=${encodeURIComponent(s)}`);
+    window.location.assign(`/explore?q=${encodeURIComponent(s)}`);
   };
 
   const handlePostSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -291,20 +944,23 @@ const HomePage: React.FC = () => {
       <NavBar />
 
       <main className="gh-main" role="main">
+
+        {/* ── Hero ── */}
         <section className="gh-hero" aria-labelledby="hero-heading">
           <div>
-            <h2 id="hero-heading" className="gh-hero-title">Give waste a new life</h2>
+            <div className="gh-hero-eyebrow">🌿 Community Recycling Network</div>
+            <h2 id="hero-heading" className="gh-hero-title">
+              Give waste<br />a <em>new life</em>
+            </h2>
             <p className="gh-hero-subtitle">
-              Post recyclable items, schedule a pickup, and earn rewards — all in a few taps. Help your neighborhood become cleaner and greener.
+              Post recyclable items, schedule a pickup, and earn rewards — all in a few taps.
+              Help your neighborhood become cleaner and greener.
             </p>
 
             <div className="gh-row">
               <button
                 className="gh-btn gh-btn-primary"
-                onClick={(e) => {
-                  createRipple(e);
-                  openPostModal();
-                }}
+                onClick={(e) => { createRipple(e); openPostModal(); }}
                 aria-haspopup="dialog"
                 aria-controls="post-modal"
               >
@@ -317,7 +973,7 @@ const HomePage: React.FC = () => {
                   onSubmit={(e) => {
                     e.preventDefault();
                     if (!query.trim()) return;
-                    window.location.assign(`/rewards?q=${encodeURIComponent(query.trim())}`);
+                    window.location.assign(`/explore?q=${encodeURIComponent(query.trim())}`);
                   }}
                   role="search"
                   aria-label="Search recycling"
@@ -325,18 +981,11 @@ const HomePage: React.FC = () => {
                   <input
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search recycling tips, locations, or items"
+                    placeholder="Search tips, locations, or items…"
                     aria-label="Search recycling"
                     onFocus={() => debouncedQuery && setShowSuggestions(true)}
                   />
-                  <button
-                    type="submit"
-                    onClick={(e) => {
-                      createRipple(e);
-                    }}
-                  >
-                    Search
-                  </button>
+                  <button type="submit" onClick={(e) => createRipple(e)}>Search</button>
                 </form>
 
                 {showSuggestions && suggestions.length > 0 && (
@@ -348,9 +997,7 @@ const HomePage: React.FC = () => {
                         role="option"
                         className="gh-suggestion"
                         onClick={() => onSelectSuggestion(s)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") onSelectSuggestion(s);
-                        }}
+                        onKeyDown={(e) => { if (e.key === "Enter") onSelectSuggestion(s); }}
                       >
                         {s}
                       </div>
@@ -363,39 +1010,43 @@ const HomePage: React.FC = () => {
             <ul className="gh-trust-list">
               <li>Free local pickup</li>
               <li>Verified collectors</li>
-              <li>Earn points & certificates</li>
+              <li>Earn points &amp; certificates</li>
             </ul>
           </div>
 
-          <aside aria-hidden>
-            <div className="gh-impact-card" aria-hidden>
+          {/* Impact card */}
+          <aside aria-label="Community statistics">
+            <div className="gh-impact-card">
               <div className="gh-impact-title">Community Impact</div>
-
-              <div className="gh-impact-grid" role="list" aria-label="Community statistics">
+              <div className="gh-impact-grid">
                 <div className="gh-impact-item">
                   <div className="gh-impact-value">{users.toLocaleString()}</div>
                   <div className="gh-impact-label">Members</div>
                 </div>
+                <div className="gh-impact-divider" aria-hidden />
                 <div className="gh-impact-item">
                   <div className="gh-impact-value">{pickups.toLocaleString()}</div>
                   <div className="gh-impact-label">Pickups</div>
                 </div>
+                <div className="gh-impact-divider" aria-hidden />
                 <div className="gh-impact-item">
-                  <div className="gh-impact-value">{kg.toLocaleString()}</div>
+                  <div className="gh-impact-value">{(kg / 1000).toFixed(1)}k</div>
                   <div className="gh-impact-label">Kg Collected</div>
                 </div>
               </div>
-
-              <div style={{ marginTop: 12, textAlign: "center" }}>
+              <div style={{ marginTop: 18, textAlign: "center" }}>
                 <Link to="/explore" className="gh-small-link">Explore as guest →</Link>
               </div>
             </div>
           </aside>
         </section>
 
+        {/* ── Categories ── */}
         <section aria-labelledby="categories-heading">
-          <h3 id="categories-heading" className="gh-section-title">Common recyclable items</h3>
-
+          <div className="gh-section-header">
+            <h3 id="categories-heading" className="gh-section-title">Common recyclables</h3>
+            <div className="gh-section-line" aria-hidden />
+          </div>
           <div className="gh-cat-grid" role="list">
             {CATEGORIES.map((c) => (
               <div
@@ -409,18 +1060,22 @@ const HomePage: React.FC = () => {
               >
                 <div className="gh-cat-emoji" aria-hidden>{c.emoji}</div>
                 <div className="gh-cat-label">{c.label}</div>
-                <div className="gh-cat-action">Post now →</div>
+                {/* "Post now" removed as requested */}
               </div>
             ))}
           </div>
         </section>
 
+        {/* ── Steps ── */}
         <section aria-labelledby="how-heading">
-          <h3 id="how-heading" className="gh-section-title">How it works</h3>
-
+          <div className="gh-section-header">
+            <h3 id="how-heading" className="gh-section-title">How it works</h3>
+            <div className="gh-section-line" aria-hidden />
+          </div>
           <div className="gh-steps">
             {STEPS.map((s) => (
               <article key={s.title} className="gh-step" tabIndex={0} aria-label={s.title}>
+                <div className="gh-step-num" aria-hidden>{s.num}</div>
                 <div className="gh-step-icon" aria-hidden>{s.icon}</div>
                 <h4 className="gh-step-title">{s.title}</h4>
                 <p className="gh-step-text">{s.text}</p>
@@ -429,28 +1084,28 @@ const HomePage: React.FC = () => {
           </div>
         </section>
 
+        {/* ── CTA ── */}
         <section className="gh-get-started" aria-label="Get started">
-          <div>
-            <h3 style={{ margin: 0 }}>Ready to make an impact?</h3>
-            <p style={{ marginTop: 8 }}>Create an account and schedule your first pickup in minutes.</p>
+          <div style={{ position: "relative", zIndex: 1 }}>
+            <h3>Ready to make an impact?</h3>
+            <p>Create an account and schedule your first pickup in minutes.</p>
           </div>
           <div className="gh-cta">
-            <Link to="/register" className="gh-btn gh-btn-primary" onClick={(e) => createRipple(e as any)}>Register</Link>
-            <button
-              className="gh-btn gh-btn-ghost"
-              onClick={(e) => {
-                createRipple(e);
-                openPostModal();
-              }}
+            <Link
+              to="/register"
+              className="gh-btn gh-btn-cta-accent"
+              onClick={(e) => createRipple(e as any)}
             >
-              Post Waste
-            </button>
+              Register free
+            </Link>
+            {/* Post Waste button removed from CTA as requested */}
           </div>
         </section>
       </main>
 
       <Footer />
 
+      {/* ── Modal ── */}
       {modalOpen && (
         <div
           className="gh-modal-overlay"
@@ -460,39 +1115,31 @@ const HomePage: React.FC = () => {
           onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
         >
           <div className="gh-modal" id="post-modal">
-            <h3 id="post-modal-title">Post recyclable item</h3>
-            <p style={{ marginTop: 6, color: "var(--gh-muted)" }}>
-              Fill out a few details to request a pickup. This is a demo modal — integrate with your API to persist.
+            <h3 id="post-modal-title">Post a recyclable item</h3>
+            <p style={{ marginTop: 6, color: "var(--gh-muted)", fontSize: "0.91rem" }}>
+              Fill out a few details to request a pickup. Integrate with your API to persist.
             </p>
 
-            <form onSubmit={handlePostSubmit} style={{ marginTop: 12 }}>
-              <label style={{ display: "block", fontSize: 13, marginBottom: 6 }}>Item type</label>
+            <form onSubmit={handlePostSubmit}>
+              <label>Item type</label>
               <select name="type" defaultValue={prefillCategory || ""} aria-label="Item type">
-                <option value="">Select type</option>
+                <option value="">Select type…</option>
                 {CATEGORIES.map((c) => (
                   <option key={c.key} value={c.key}>{c.label}</option>
                 ))}
               </select>
 
-              <label style={{ display: "block", fontSize: 13, marginTop: 12, marginBottom: 6 }}>Notes (optional)</label>
-              <textarea name="desc" placeholder="Add any notes for collectors (e.g., quantity, location, fragile)"></textarea>
+              <label>Notes (optional)</label>
+              <textarea name="desc" placeholder="Quantity, location, any special handling…" />
 
-              <div style={{ display: "flex", gap: 8, marginTop: 12, justifyContent: "flex-end" }}>
-                <button
-                  type="button"
-                  className="gh-btn gh-btn-ghost"
-                  onClick={() => {
-                    // @ts-ignore event usage for ripple demo
-                    createRipple(event as any);
-                    closeModal();
-                  }}
-                >
+              <div className="gh-modal-footer">
+                <button type="button" className="gh-btn gh-btn-ghost" onClick={closeModal}>
                   Cancel
                 </button>
                 <button
                   type="submit"
                   className="gh-btn gh-btn-primary"
-                  onClick={(e) => { createRipple(e); }}
+                  onClick={(e) => createRipple(e)}
                 >
                   Submit
                 </button>

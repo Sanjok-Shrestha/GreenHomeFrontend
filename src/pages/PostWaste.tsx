@@ -1,21 +1,13 @@
+// src/pages/PostWaste.tsx
 import React, { useEffect, useRef, useState, useContext } from "react";
 import type { AxiosProgressEvent } from "axios";
 import { useNavigate } from "react-router-dom";
 import api from "../api";
 import { AuthContext } from "../App";
+import Sidebar from "../components/Sidebar";
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-
-/**
- * PostWaste with optional map picker or text-field location input.
- * - Toggle between "Text address" and "Pick on map".
- * - When using map, click to place marker; reverse-geocode (Nominatim) attempts to fill address.
- * - When using text, you can geocode the address to center the map for preview.
- * - Latitude/longitude are appended to the form (lat,lng) if available.
- *
- * Save/replace: src/pages/PostWaste.tsx
- */
 
 /* Default Leaflet icon (ensure marker images show correctly) */
 const defaultIcon = L.icon({
@@ -31,17 +23,33 @@ const defaultIcon = L.icon({
 type FormState = {
   wasteType: string;
   quantity: string;
-  location: string; // human readable address or text
+  location: string;
   description: string;
 };
 
-export default function PostWaste() {
+type PricingItem = {
+  _id?: string;
+  wasteType: string;
+  pricePerKg: number;
+};
+
+/* Local fallback price map if backend pricing not present */
+const FALLBACK_PRICE_PER_KG: Record<string, number> = {
+  plastic: 40,
+  paper: 15,
+  metal: 80,
+  glass: 10,
+  organic: 5,
+  electronic: 200,
+};
+
+export default function PostWaste(): React.JSX.Element {
   const navigate = useNavigate();
   const { setAuthState } = useContext(AuthContext);
 
   const [user] = useState<any>(() => {
-    const userData = localStorage.getItem("user");
-    return userData ? JSON.parse(userData) : null;
+    const u = localStorage.getItem("user");
+    return u ? JSON.parse(u) : null;
   });
 
   const [formData, setFormData] = useState<FormState>({
@@ -58,6 +66,11 @@ export default function PostWaste() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [estimatedPrice, setEstimatedPrice] = useState<number | null>(null);
+
+  // Pricing & categories
+  const [pricing, setPricing] = useState<PricingItem[]>([]);
+  const [pricingLoading, setPricingLoading] = useState<boolean>(true);
+  const [pricingError, setPricingError] = useState<string | null>(null);
 
   // Location mode: "text" or "map"
   const [locationMode, setLocationMode] = useState<"text" | "map">("text");
@@ -104,12 +117,66 @@ export default function PostWaste() {
         setMapCenter([lat, lng]);
       },
       () => {
-        // fallback to a neutral world view if geolocation fails
         setMapCenter([20, 0]);
       },
       { enableHighAccuracy: false, timeout: 5000 }
     );
   }, []);
+
+  // Load pricing (and poll + listen for storage changes)
+  useEffect(() => {
+    let mounted = true;
+    let poll: number | undefined;
+
+    async function loadPricing() {
+      if (!mounted) return;
+      setPricingLoading(true);
+      setPricingError(null);
+      try {
+        const res = await api.get("/pricing").catch(() => null);
+        const data = res && res.data ? (Array.isArray(res.data) ? res.data : res.data.data ?? []) : [];
+        if (mounted) setPricing(data);
+      } catch (err: any) {
+        console.error("Failed to load pricing", err);
+        if (mounted) setPricingError("Failed to load price guide");
+      } finally {
+        if (mounted) setPricingLoading(false);
+      }
+    }
+
+    loadPricing();
+    poll = window.setInterval(loadPricing, 20000);
+
+    function onStorage(e: StorageEvent) {
+      if (e.key === "pricing:updated") {
+        loadPricing();
+      }
+    }
+    window.addEventListener("storage", onStorage);
+
+    return () => {
+      mounted = false;
+      if (poll) window.clearInterval(poll);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
+
+  // compute estimated price whenever wasteType or quantity or pricing changes
+  useEffect(() => {
+    const wt = (formData.wasteType || "").trim().toLowerCase();
+    const qn = Number(formData.quantity || 0);
+    if (!wt || !qn || Number.isNaN(qn) || qn <= 0) {
+      setEstimatedPrice(null);
+      return;
+    }
+    const p = pricing.find((x) => (x.wasteType || "").trim().toLowerCase() === wt);
+    const pricePerKg = p ? Number(p.pricePerKg || 0) : FALLBACK_PRICE_PER_KG[wt] ?? 0;
+    if (!pricePerKg) {
+      setEstimatedPrice(null);
+      return;
+    }
+    setEstimatedPrice(Math.round(pricePerKg * qn));
+  }, [formData.wasteType, formData.quantity, pricing]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -167,9 +234,7 @@ export default function PostWaste() {
         const lon = Number(arr[0].lon);
         setMapCenter([lat, lon]);
         setMarkerPos([lat, lon]);
-        // set human readable address (normalized)
         setFormData((f) => ({ ...f, location: arr[0].display_name ?? address }));
-        // pan map if present
         try {
           mapRef.current?.setView([lat, lon], 15);
         } catch {}
@@ -183,13 +248,12 @@ export default function PostWaste() {
     return null;
   };
 
-  // Small map click handler component to register clicks
+  // Map click handler
   function ClickHandler() {
     useMapEvents({
       click: async (e) => {
         const { lat, lng } = e.latlng;
         setMarkerPos([lat, lng]);
-        // reverse geocode
         const addr = await reverseGeocode(lat, lng);
         if (addr) setFormData((f) => ({ ...f, location: addr }));
       },
@@ -197,7 +261,6 @@ export default function PostWaste() {
     return null;
   }
 
-  // MapSetter sets mapRef.current using useMap (typed)
   function MapSetter({ setter }: { setter: React.MutableRefObject<L.Map | null> }) {
     const map = useMap();
     useEffect(() => {
@@ -235,13 +298,13 @@ export default function PostWaste() {
       data.append("description", formData.description);
       data.append("image", imageFile);
 
-      // include lat/lng if selected on map
       if (markerPos) {
         data.append("lat", String(markerPos[0]));
         data.append("lng", String(markerPos[1]));
       }
 
-      const res = await api.post("/api/waste/post", data, {
+      // NOTE: api.baseURL already contains "/api", so call "/waste/post"
+      const res = await api.post("/waste/post", data, {
         headers: { "Content-Type": "multipart/form-data" },
         onUploadProgress: (ev: AxiosProgressEvent) => {
           const loaded = (ev as any).loaded as number | undefined;
@@ -253,7 +316,7 @@ export default function PostWaste() {
       });
 
       const estimated = res?.data?.estimatedPrice;
-      setEstimatedPrice(typeof estimated === "number" ? estimated : null);
+      setEstimatedPrice(typeof estimated === "number" ? estimated : estimatedPrice);
       setSuccess(true);
 
       const createdId =
@@ -263,7 +326,11 @@ export default function PostWaste() {
         res?.data?.id ??
         null;
 
-      if (createdId) setTimeout(() => navigate(`/track/${createdId}`), 1200);
+      if (createdId) {
+        navigate(`/pickups?created=${createdId}`);
+      } else {
+        navigate("/pickups");
+      }
 
       setTimeout(() => {
         setFormData({ wasteType: "", quantity: "", location: "", description: "" });
@@ -276,7 +343,7 @@ export default function PostWaste() {
         setEstimatedPrice(null);
         setUploadProgress(null);
         setMarkerPos(null);
-      }, 2000);
+      }, 1500);
     } catch (err: any) {
       const status = err?.response?.status;
       const message = err?.response?.data?.message || err.message || "Failed to post waste.";
@@ -292,7 +359,7 @@ export default function PostWaste() {
       } else if (status === 403) {
         setError(message || "You don't have permission to post waste.");
       } else if (status === 400) {
-        setError(message || "Bad request — please check the fields.");
+        setError(message || "Bad request �� please check the fields.");
       } else {
         setError(message);
       }
@@ -314,200 +381,104 @@ export default function PostWaste() {
     navigate("/login", { replace: true });
   };
 
-  return (
-    <div style={styles.container}>
-      <div style={styles.sidebar}>
-        <div style={styles.logo}><h2 style={styles.logoText}>GreenHome</h2></div>
-        <nav style={styles.nav}>
-          <button style={styles.navItem} onClick={() => navigate("/dashboard")}>Dashboard</button>
-          <button style={{ ...styles.navItem, ...styles.navItemActive }}>Post Waste</button>
-          <button style={styles.navItem} onClick={() => navigate("/pickups")}>Pickup Status</button>
-          <button style={styles.navItem} onClick={() => navigate("/rewards")}>Rewards</button>
-          <button style={styles.navItem} onClick={() => navigate("/profile")}>Profile</button>
-          <button style={styles.navItemLogout} onClick={handleLogout}>Logout</button>
-        </nav>
-      </div>
+  function getPricePerKgForType(typeValue: string): number | null {
+    const t = (typeValue || "").trim().toLowerCase();
+    if (!t) return null;
+    const p = pricing.find((x) => (x.wasteType || "").trim().toLowerCase() === t);
+    if (p && typeof p.pricePerKg === "number") return Number(p.pricePerKg);
+    const fallback = FALLBACK_PRICE_PER_KG[t];
+    return typeof fallback === "number" ? fallback : null;
+  }
 
-      <div style={styles.main}>
-        <div style={styles.header}>
+  return (
+    <div style={{ display: "flex", minHeight: "100vh", background: "#f5f7fb" }}>
+      <Sidebar />
+
+      <div style={{ flex: 1, maxWidth: 1100, margin: "0 auto", padding: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 30 }}>
           <div>
-            <h1 style={styles.title}>Post Waste Collection</h1>
-            <p style={styles.subtitle}>Submit your waste for collection and optionally pick location on map</p>
+            <h1 style={{ margin: 0, fontSize: 32, color: "#2c3e50", fontWeight: 700 }}>Post Waste Collection</h1>
+            <p style={{ margin: "8px 0 0 0", color: "#7f8c8d", fontSize: 16 }}>Submit your waste for collection and optionally pick location on map</p>
           </div>
-          <div style={styles.profileIcon}>{user?.name?.charAt(0).toUpperCase() || "U"}</div>
+          <div style={{ width: 55, height: 55, borderRadius: "50%", backgroundColor: "#19fd0d", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: "bold" }}>
+            {user?.name?.charAt(0).toUpperCase() || "U"}
+          </div>
         </div>
 
-        <div style={styles.contentGrid}>
-          <div style={styles.formCard}>
-            <h3 style={styles.cardTitle}>Waste Details</h3>
-            {error && <div style={styles.errorBox}><span style={styles.errorIcon}>❌</span>{error}</div>}
-            {success && <div style={styles.successBox}><span style={styles.successIcon}>✅</span>Waste posted successfully!{estimatedPrice ? ` Estimated: Rs ${estimatedPrice}` : ""}</div>}
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 20 }}>
+          {/* form card */}
+          <div style={{ background: "white", padding: 30, borderRadius: 12, boxShadow: "0 2px 12px rgba(0,0,0,0.08)" }}>
+            <h3 style={{ margin: "0 0 15px 0", fontSize: 18, color: "#2c3e50", fontWeight: 600 }}>Waste Details</h3>
+            {error && <div style={{ backgroundColor: "#fee", color: "#c33", padding: 12, borderRadius: 8, marginBottom: 12 }}>{error}</div>}
+            {success && <div style={{ backgroundColor: "#d4edda", color: "#155724", padding: 12, borderRadius: 8, marginBottom: 12 }}>Waste posted successfully!{estimatedPrice ? ` Estimated: Rs ${estimatedPrice}` : ""}</div>}
 
             <form onSubmit={handleSubmit}>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Waste Type *</label>
-                <select
-                  name="wasteType"
-                  value={formData.wasteType}
-                  onChange={handleChange}
-                  style={{ ...styles.select, backgroundColor: "#fff", color: formData.wasteType ? "#13402a" : "#6b7280" }}
-                  disabled={loading}
-                  required
-                >
+              {/* Waste Type */}
+              <div style={{ marginBottom: 18 }}>
+                <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>Waste Type *</label>
+                <select name="wasteType" value={formData.wasteType} onChange={handleChange} style={{ width: "100%", padding: 12, borderRadius: 8, border: "1px solid #ddd" }} required>
                   <option value="" disabled>Select waste type</option>
                   {wasteTypes.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
               </div>
 
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Quantity (kg) *</label>
-                <input
-                  type="number"
-                  name="quantity"
-                  placeholder="Enter quantity in kg"
-                  value={formData.quantity}
-                  onChange={handleChange}
-                  style={{ ...styles.input, backgroundColor: "#fff", color: "#111" }}
-                  disabled={loading}
-                  min="0.1"
-                  step="0.1"
-                  required
-                />
+              {/* Quantity */}
+              <div style={{ marginBottom: 18 }}>
+                <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>Quantity (kg) *</label>
+                <input type="number" name="quantity" placeholder="Enter quantity in kg" value={formData.quantity} onChange={handleChange} style={{ width: "100%", padding: 12, borderRadius: 8, border: "1px solid #ddd" }} min="0.1" step="0.1" required />
               </div>
 
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Pickup Location</label>
-
-                <div style={{ marginBottom: 8, display: "flex", gap: 8, alignItems: "center" }}>
-                  <label style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
-                    <input type="radio" checked={locationMode === "text"} onChange={() => setLocationMode("text")} /> Text
-                  </label>
-                  <label style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
-                    <input type="radio" checked={locationMode === "map"} onChange={() => setLocationMode("map")} /> Pick on map
-                  </label>
+              {/* Location and map section */}
+              <div style={{ marginBottom: 18 }}>
+                <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>Pickup Location</label>
+                <div style={{ marginBottom: 8, display: "flex", gap: 8 }}>
+                  <label><input type="radio" checked={locationMode === "text"} onChange={() => setLocationMode("text")} /> Text</label>
+                  <label><input type="radio" checked={locationMode === "map"} onChange={() => setLocationMode("map")} /> Pick on map</label>
                 </div>
 
                 {locationMode === "text" ? (
-                  <div>
-                    <input
-                      type="text"
-                      name="location"
-                      placeholder="Enter address (or leave blank)"
-                      value={formData.location}
-                      onChange={handleChange}
-                      style={{ ...styles.input, backgroundColor: "#fff", color: "#111" }}
-                      disabled={loading}
-                    />
+                  <>
+                    <input type="text" name="location" placeholder="Enter address (or leave blank)" value={formData.location} onChange={handleChange} style={{ width: "100%", padding: 12, borderRadius: 8, border: "1px solid #ddd" }} />
                     <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (!formData.location) {
-                            setError("Enter an address to center on map.");
-                            return;
-                          }
-                          setError("");
-                          await geocodeAddress(formData.location);
-                        }}
-                        style={{ ...styles.buttonSmall, backgroundColor: "#eef6ff", border: "1px solid #dfe", cursor: "pointer" }}
-                      >
-                        Geocode & preview on map
-                      </button>
-                      <div style={{ alignSelf: "center", color: "#666", fontSize: 13 }}>
-                        {geocoding ? "Searching..." : markerPos ? `Selected: ${markerPos[0].toFixed(4)}, ${markerPos[1].toFixed(4)}` : ""}
-                      </div>
+                      <button type="button" onClick={async () => { if (!formData.location) { setError("Enter an address to center on map."); return; } setError(""); await geocodeAddress(formData.location); }} style={{ padding: "8px 12px", borderRadius: 8 }}>Geocode & preview</button>
+                      <div style={{ alignSelf: "center", color: "#666", fontSize: 13 }}>{geocoding ? "Searching..." : markerPos ? `Selected: ${markerPos[0].toFixed(4)}, ${markerPos[1].toFixed(4)}` : ""}</div>
                     </div>
-                  </div>
+                  </>
                 ) : (
-                  <div style={{ marginTop: 8 }}>
-                    <div style={{ marginBottom: 8, color: "#666", fontSize: 13 }}>Click on the map to select pickup location</div>
+                  <>
                     <div style={{ height: 300, borderRadius: 10, overflow: "hidden", border: "1px solid rgba(0,0,0,0.06)" }}>
-                      <MapContainer
-                        center={mapCenter ?? [20, 0]}
-                        zoom={mapCenter ? 13 : 2}
-                        style={{ height: "100%", width: "100%" }}
-                      >
+                      <MapContainer center={mapCenter ?? [20, 0]} zoom={mapCenter ? 13 : 2} style={{ height: "100%", width: "100%" }}>
                         <MapSetter setter={mapRef} />
                         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap" />
                         <ClickHandler />
-                        {markerPos && (
-                          <Marker position={markerPos} icon={defaultIcon}>
-                            <Popup>Selected location</Popup>
-                          </Marker>
-                        )}
+                        {markerPos && <Marker position={markerPos} icon={defaultIcon}><Popup>Selected location</Popup></Marker>}
                       </MapContainer>
                     </div>
-
                     <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setMarkerPos(null);
-                          setFormData((f) => ({ ...f, location: "" }));
-                        }}
-                        style={{ ...styles.buttonSmall, backgroundColor: "#f6f6f6" }}
-                      >
-                        Clear selection
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!navigator.geolocation) {
-                            alert("Geolocation not supported by your browser.");
-                            return;
-                          }
-                          navigator.geolocation.getCurrentPosition(
-                            async (pos) => {
-                              const lat = pos.coords.latitude;
-                              const lon = pos.coords.longitude;
-                              setMarkerPos([lat, lon]);
-                              setMapCenter([lat, lon]);
-                              const addr = await reverseGeocode(lat, lon);
-                              if (addr) setFormData((f) => ({ ...f, location: addr }));
-                              try {
-                                mapRef.current?.setView([lat, lon], 15);
-                              } catch {}
-                            },
-                            () => alert("Unable to access your location."),
-                            { enableHighAccuracy: true }
-                          );
-                        }}
-                        style={{ ...styles.buttonSmall, backgroundColor: "#eef6ff" }}
-                      >
-                        Use my location
-                      </button>
-
-                      <div style={{ alignSelf: "center", color: "#666", fontSize: 13 }}>
-                        {markerPos ? `Selected: ${markerPos[0].toFixed(4)}, ${markerPos[1].toFixed(4)}` : "No location selected"}
-                      </div>
+                      <button type="button" onClick={() => { setMarkerPos(null); setFormData((f) => ({ ...f, location: "" })); }} style={{ padding: "8px 12px", borderRadius: 8 }}>Clear selection</button>
+                      <button type="button" onClick={() => { navigator.geolocation?.getCurrentPosition(async (pos) => { setMarkerPos([pos.coords.latitude, pos.coords.longitude]); setMapCenter([pos.coords.latitude, pos.coords.longitude]); const addr = await reverseGeocode(pos.coords.latitude, pos.coords.longitude); if (addr) setFormData((f) => ({ ...f, location: addr })); try { mapRef.current?.setView([pos.coords.latitude, pos.coords.longitude], 15); } catch {} }, () => alert("Unable to access your location.")); }} style={{ padding: "8px 12px", borderRadius: 8 }}>Use my location</button>
+                      <div style={{ alignSelf: "center", color: "#666", fontSize: 13 }}>{markerPos ? `Selected: ${markerPos[0].toFixed(4)}, ${markerPos[1].toFixed(4)}` : "No location selected"}</div>
                     </div>
-                  </div>
+                  </>
                 )}
               </div>
 
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Additional Notes</label>
-                <textarea
-                  name="description"
-                  placeholder="Any additional information..."
-                  value={formData.description}
-                  onChange={handleChange}
-                  style={{ ...styles.textarea, backgroundColor: "#fff", color: "#111" }}
-                  disabled={loading}
-                  rows={4}
-                />
+              {/* Additional Notes */}
+              <div style={{ marginBottom: 18 }}>
+                <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>Additional Notes</label>
+                <textarea name="description" placeholder="Any additional information..." value={formData.description} onChange={handleChange} rows={4} style={{ width: "100%", padding: 12, borderRadius: 8, border: "1px solid #ddd" }} />
               </div>
 
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Photo *</label>
+              {/* Photo */}
+              <div style={{ marginBottom: 18 }}>
+                <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>Photo *</label>
                 <div style={{ fontSize: 13, color: "#666", marginBottom: 8 }}>Please upload a clear photo of the waste (required).</div>
-                <input type="file" accept="image/*" onChange={handleFileChange} disabled={loading} required />
+                <input type="file" accept="image/*" onChange={handleFileChange} required />
                 {imagePreview && (
                   <div style={{ marginTop: 10 }}>
                     <img src={imagePreview} alt="preview" style={{ maxWidth: 180, borderRadius: 8, display: "block", marginBottom: 6 }} />
                     <div style={{ display: "flex", gap: 8 }}>
-                      <button type="button" onClick={handleRemoveImage} style={{ ...styles.buttonSmall, backgroundColor: "#e74c3c", color: "#fff" }}>Remove</button>
+                      <button type="button" onClick={handleRemoveImage} style={{ padding: "8px 12px", borderRadius: 8, background: "#e74c3c", color: "#fff" }}>Remove</button>
                       <span style={{ alignSelf: "center", color: "#666" }}>{Math.round((imageFile?.size ?? 0) / 1024)} KB</span>
                     </div>
                   </div>
@@ -522,28 +493,34 @@ export default function PostWaste() {
                 )}
               </div>
 
-              <button type="submit" style={styles.submitButton} disabled={loading}>{loading ? "Submitting..." : "Submit Waste"}</button>
+              {/* FULL WIDTH SUBMIT BUTTON */}
+              <button type="submit" style={{ width: "100%", padding: "14px 20px", backgroundColor: "#19fd0d", color: "white", border: "none", borderRadius: 10, fontSize: 16, fontWeight: 600 }} disabled={loading}>
+                {loading ? "Submitting..." : "Submit Waste"}
+              </button>
             </form>
           </div>
 
-          <div style={styles.infoCard}>
-            <div style={styles.priceGuide}>
-              <h4 style={styles.priceTitle}>Price Guide (per kg)</h4>
-              <div style={styles.priceList}>
-                <div style={styles.priceItem}><span>Plastic</span><span style={styles.priceValue}>Rs 30-50</span></div>
-                <div style={styles.priceItem}><span>Paper</span><span style={styles.priceValue}>Rs 10-20</span></div>
-                <div style={styles.priceItem}><span>Metal</span><span style={styles.priceValue}>Rs 60-100</span></div>
-                <div style={styles.priceItem}><span>Glass</span><span style={styles.priceValue}>Rs 5-15</span></div>
-                <div style={styles.priceItem}><span>Electronic</span><span style={styles.priceValue}>Rs 100-500</span></div>
+          {/* price / tips */}
+          <div style={{ background: "white", padding: 20, borderRadius: 12, boxShadow: "0 2px 12px rgba(0,0,0,0.08)" }}>
+            <div style={{ background: "#f8f9fa", padding: 16, borderRadius: 10, marginBottom: 18 }}>
+              <h4 style={{ marginTop: 0, fontSize: 15, color: "#2c3e50", fontWeight: 600 }}>Price Guide (per kg)</h4>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {pricingLoading ? <div style={{ color: "#666" }}>Loading price guide…</div> :
+                  (pricing.length === 0 ? Object.keys(FALLBACK_PRICE_PER_KG).map((k) => (<div key={k} style={{ display: "flex", justifyContent: "space-between" }}><span>{k.charAt(0).toUpperCase() + k.slice(1)}</span><span style={{ fontWeight: 600, color: "#27ae60" }}>Rs {FALLBACK_PRICE_PER_KG[k]}</span></div>)) :
+                    pricing.map((p) => (<div key={p._id ?? p.wasteType} style={{ display: "flex", justifyContent: "space-between" }}><span>{p.wasteType}</span><span style={{ fontWeight: 600, color: "#27ae60" }}>Rs {p.pricePerKg}</span></div>)))}
+              </div>
+
+              <div style={{ marginTop: 12 }}>
+                <button onClick={() => { window.localStorage.setItem("pricing:updated", String(Date.now())); api.get("/pricing").then((r) => setPricing(Array.isArray(r.data) ? r.data : r.data?.data ?? [])).catch(() => {}); }} style={{ padding: "8px 12px", borderRadius: 8, background: "#f1f1f1", border: "none" }}>Refresh Price Guide</button>
               </div>
             </div>
 
-            <h3 style={styles.cardTitle}>Quick Tips</h3>
-            <div style={styles.tipsList}>
-              <div style={styles.tipItem}><span style={styles.tipIcon}>✅</span><p style={styles.tipText}>Clean and separate waste by type</p></div>
-              <div style={styles.tipItem}><span style={styles.tipIcon}>✅</span><p style={styles.tipText}>Remove labels from bottles</p></div>
-              <div style={styles.tipItem}><span style={styles.tipIcon}>✅</span><p style={styles.tipText}>Flatten cardboard boxes</p></div>
-              <div style={styles.tipItem}><span style={styles.tipIcon}>✅</span><p style={styles.tipText}>Accurate weight = Better pricing</p></div>
+            <h3 style={{ margin: "0 0 12px 0", fontSize: 18, color: "#2c3e50", fontWeight: 600 }}>Quick Tips</h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", gap: 10 }}><div style={{ color: "#27ae60" }}>✅</div><p style={{ margin: 0 }}>Clean and separate waste by type</p></div>
+              <div style={{ display: "flex", gap: 10 }}><div style={{ color: "#27ae60" }}>✅</div><p style={{ margin: 0 }}>Remove labels from bottles</p></div>
+              <div style={{ display: "flex", gap: 10 }}><div style={{ color: "#27ae60" }}>✅</div><p style={{ margin: 0 }}>Flatten cardboard boxes</p></div>
+              <div style={{ display: "flex", gap: 10 }}><div style={{ color: "#27ae60" }}>✅</div><p style={{ margin: 0 }}>Accurate weight = Better pricing</p></div>
             </div>
           </div>
         </div>
@@ -551,44 +528,3 @@ export default function PostWaste() {
     </div>
   );
 }
-
-/* styles (same as your existing styles, with map-specific additions) */
-const styles: { [key: string]: React.CSSProperties } = {
-  container: { display: "flex", minHeight: "calc(100vh - 72px)", fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif", backgroundColor: "#f5f7fb" },
-  sidebar: { width: "260px", backgroundColor: "#2c3e50", color: "white", display: "flex", flexDirection: "column", padding: "20px 0", boxShadow: "2px 0 10px rgba(0,0,0,0.1)" },
-  logo: { padding: "0 20px 30px", borderBottom: "1px solid rgba(255,255,255,0.1)" },
-  logoText: { margin: 0, fontSize: "24px", fontWeight: "600" },
-  nav: { display: "flex", flexDirection: "column", gap: "5px", padding: "20px 10px", flex: 1 },
-  navItem: { background: "transparent", border: "none", color: "white", padding: "14px 18px", textAlign: "left", cursor: "pointer", borderRadius: "8px", fontSize: "15px", transition: "all 0.3s ease", fontWeight: "500" },
-  navItemActive: { backgroundColor: "#34495e" },
-  navItemLogout: { background: "#e74c3c", border: "none", color: "white", padding: "14px 18px", textAlign: "left", cursor: "pointer", borderRadius: "8px", fontSize: "15px", marginTop: "auto", fontWeight: "600", transition: "all 0.3s ease" },
-  main: { flex: 1, padding: "30px", overflowY: "auto" },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "30px" },
-  title: { margin: 0, fontSize: "32px", color: "#2c3e50", fontWeight: "700" },
-  subtitle: { margin: "8px 0 0 0", color: "#7f8c8d", fontSize: "16px" },
-  profileIcon: { width: "55px", height: "55px", borderRadius: "50%", backgroundColor: "#19fd0d", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "22px", fontWeight: "bold", boxShadow: "0 4px 12px rgba(25,253,13,0.3)" },
-  contentGrid: { display: "grid", gridTemplateColumns: "2fr 1fr", gap: "20px" },
-  formCard: { backgroundColor: "white", padding: "30px", borderRadius: "12px", boxShadow: "0 2px 12px rgba(0,0,0,0.08)" },
-  infoCard: { backgroundColor: "white", padding: "20px", borderRadius: "12px", boxShadow: "0 2px 12px rgba(0,0,0,0.08)" },
-  cardTitle: { margin: "0 0 15px 0", fontSize: "18px", color: "#2c3e50", fontWeight: "600" },
-  errorBox: { backgroundColor: "#fee", color: "#c33", padding: "12px 15px", borderRadius: "8px", marginBottom: "20px", display: "flex", alignItems: "center", gap: "10px", fontSize: "14px" },
-  errorIcon: { fontSize: "18px" },
-  successBox: { backgroundColor: "#d4edda", color: "#155724", padding: "12px 15px", borderRadius: "8px", marginBottom: "20px", display: "flex", alignItems: "center", gap: "10px", fontSize: "14px", fontWeight: "500" },
-  successIcon: { fontSize: "18px" },
-  formGroup: { marginBottom: "18px" },
-  label: { display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: "600", color: "#2c3e50" },
-  input: { width: "100%", padding: "12px 15px", borderRadius: "8px", border: "1px solid #ddd", fontSize: "15px", outline: "none", transition: "border-color 0.3s ease", boxSizing: "border-box", backgroundColor: "#fff", color: "#111" },
-  select: { width: "100%", padding: "12px 15px", borderRadius: "8px", border: "1px solid #ddd", fontSize: "15px", outline: "none", transition: "border-color 0.3s ease", backgroundColor: "white", cursor: "pointer", boxSizing: "border-box", height: 44, lineHeight: "20px" },
-  textarea: { width: "100%", padding: "12px 15px", borderRadius: "8px", border: "1px solid #ddd", fontSize: "15px", outline: "none", transition: "border-color 0.3s ease", fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif", resize: "vertical", boxSizing: "border-box", backgroundColor: "#fff", color: "#111" },
-  submitButton: { width: "100%", padding: "14px 20px", backgroundColor: "#19fd0d", color: "white", border: "none", borderRadius: "10px", fontSize: "16px", fontWeight: "600", cursor: "pointer", transition: "all 0.3s ease", boxShadow: "0 4px 10px rgba(25,253,13,0.3)", marginTop: "10px" },
-  tipsList: { display: "flex", flexDirection: "column", gap: "12px", marginBottom: "20px" },
-  tipItem: { display: "flex", alignItems: "flex-start", gap: "10px" },
-  tipIcon: { fontSize: "18px", marginTop: "2px", color: "#27ae60" },
-  tipText: { margin: 0, fontSize: "14px", color: "#2c3e50", lineHeight: "1.5" },
-  priceGuide: { backgroundColor: "#f8f9fa", padding: "16px", borderRadius: "10px", marginBottom: "18px" },
-  priceTitle: { margin: "0 0 12px 0", fontSize: "15px", color: "#2c3e50", fontWeight: "600" },
-  priceList: { display: "flex", flexDirection: "column", gap: "8px" },
-  priceItem: { display: "flex", justifyContent: "space-between", fontSize: "14px", color: "#2c3e50" },
-  priceValue: { fontWeight: "600", color: "#27ae60" },
-  buttonSmall: { padding: "8px 10px", borderRadius: 8, border: "none", cursor: "pointer" },
-};

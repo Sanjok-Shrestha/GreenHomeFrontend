@@ -1,0 +1,487 @@
+/* ============================================================
+   ASSIGNED PICKUPS — COLLECTOR PAGE CSS
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+/* ── Tokens ── */
+:root {
+  --green:          #1db954;
+  --green-dark:     #0ea158;
+  --green-deeper:   #0a8a3f;
+  --green-soft:     #e8f5ed;
+  --green-border:   rgba(29, 185, 84, 0.2);
+  --green-glow:     rgba(29, 185, 84, 0.18);
+
+  --amber:          #d97706;
+  --amber-soft:     #fffbeb;
+  --amber-border:   #fde68a;
+
+  --danger:         #e23b3b;
+  --danger-soft:    #fff5f5;
+  --danger-border:  #fecaca;
+
+  --blue:           #2563eb;
+
+  --bg:             #f4f7f5;
+  --card:           #ffffff;
+  --surface:        #f9fbf9;
+  --surface-2:      #f0f5f1;
+
+  --border:         rgba(0, 0, 0, 0.07);
+  --border-strong:  rgba(0, 0, 0, 0.13);
+
+  --text:           #0b1f13;
+  --text-2:         #3a5244;
+  --text-muted:     #7a9185;
+
+  --sidebar-w:      240px;
+
+  --r-sm:   6px;
+  --r-md:   10px;
+  --r-lg:   14px;
+  --r-xl:   18px;
+
+  --sh-sm:  0 1px 3px rgba(0,0,0,.05), 0 1px 2px rgba(0,0,0,.04);
+  --sh-md:  0 4px 16px rgba(0,0,0,.07), 0 2px 6px rgba(0,0,0,.04);
+  --sh-card:0 2px 8px rgba(11,31,19,.06), 0 1px 3px rgba(0,0,0,.04);
+
+  --t:      150ms;
+  --ease:   cubic-bezier(.4, 0, .2, 1);
+
+  --font:   'Plus Jakarta Sans', system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+button { cursor: pointer; font-family: var(--font); }
+a { text-decoration: none; }
+
+/* ============================================================
+   ROOT LAYOUT
+   ============================================================ */
+.collector-root {
+  display: flex;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============================================================
+   MAIN CONTENT AREA
+   ============================================================ */
+.collector-main {
+  flex: 1;
+  min-width: 0;
+  padding: 28px 28px 64px;
+  max-width: 1080px;
+}
+
+/* ── Page header ── */
+.collector-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 22px;
+  flex-wrap: wrap;
+}
+
+.collector-title {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  color: var(--text);
+  line-height: 1.2;
+  margin-bottom: 3px;
+}
+
+.collector-sub {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* ── Header right controls ── */
+.collector-header__right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.collector-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 20px;
+  padding: 4px 11px;
+}
+
+/* ============================================================
+   BUTTONS
+   ============================================================ */
+.ap-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: var(--r-md);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font);
+  border: 1px solid var(--border-strong);
+  background: var(--card);
+  color: var(--text-2);
+  white-space: nowrap;
+  transition: background var(--t), color var(--t),
+              border-color var(--t), transform 0.1s, box-shadow var(--t);
+}
+.ap-btn:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+  transform: translateY(-1px);
+  box-shadow: var(--sh-sm);
+}
+.ap-btn:active:not(:disabled) { transform: translateY(0); box-shadow: none; }
+.ap-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Primary (refresh) */
+.ap-btn--primary {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+.ap-btn--primary:hover:not(:disabled) {
+  background: var(--green-dark);
+  border-color: var(--green-dark);
+  box-shadow: 0 4px 14px var(--green-glow);
+  color: #fff;
+}
+
+/* Call user */
+.ap-btn--call {
+  background: var(--green-soft);
+  border-color: var(--green-border);
+  color: var(--green-deeper);
+}
+.ap-btn--call:hover:not(:disabled) {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+
+/* View details */
+.ap-btn--view {
+  background: var(--card);
+  border-color: var(--border-strong);
+  color: var(--text-2);
+}
+.ap-btn--view:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+/* Mark picked — amber */
+.ap-btn--picked {
+  background: var(--amber-soft);
+  border-color: var(--amber-border);
+  color: var(--amber);
+}
+.ap-btn--picked:hover:not(:disabled) {
+  background: var(--amber);
+  border-color: var(--amber);
+  color: #fff;
+}
+
+/* Mark completed — green fill */
+.ap-btn--complete {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+.ap-btn--complete:hover:not(:disabled) {
+  background: var(--green-dark);
+  border-color: var(--green-dark);
+  box-shadow: 0 4px 12px var(--green-glow);
+}
+
+/* Load more */
+.ap-btn--load {
+  height: 38px;
+  padding: 0 24px;
+  border-radius: 20px;
+  border-color: var(--border-strong);
+}
+
+/* ============================================================
+   TOAST
+   ============================================================ */
+@keyframes ap-slideup {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+.ap-toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--text);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 9px 16px;
+  border-radius: 24px;
+  margin-bottom: 16px;
+  box-shadow: var(--sh-md);
+  animation: ap-slideup 0.2s var(--ease) both;
+}
+
+/* ============================================================
+   STATES — loading / error / empty
+   ============================================================ */
+@keyframes ap-spin { to { transform: rotate(360deg); } }
+
+.ap-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 80px 20px;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+.ap-loading::before {
+  content: '';
+  width: 32px; height: 32px;
+  border: 3px solid var(--border-strong);
+  border-top-color: var(--green);
+  border-radius: 50%;
+  animation: ap-spin 0.65s linear infinite;
+}
+
+.ap-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border);
+  border-radius: var(--r-md);
+  font-size: 13px;
+  color: var(--danger);
+}
+
+.ap-empty {
+  padding: 64px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* ============================================================
+   PICKUP CARD
+   ============================================================ */
+.ap-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.ap-card {
+  display: flex;
+  gap: 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  box-shadow: var(--sh-card);
+  overflow: hidden;
+  transition: box-shadow var(--t), border-color var(--t), transform var(--t);
+}
+.ap-card:hover {
+  box-shadow: var(--sh-md);
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+
+/* ── Card left accent stripe by status ── */
+.ap-card::before {
+  content: '';
+  width: 4px;
+  flex-shrink: 0;
+  background: var(--border-strong);
+  border-radius: var(--r-xl) 0 0 var(--r-xl);
+}
+.ap-card[data-status="picked"]::before,
+.ap-card[data-status="scheduled"]::before  { background: var(--amber); }
+.ap-card[data-status="collected"]::before,
+.ap-card[data-status="completed"]::before  { background: var(--green); }
+.ap-card[data-status="pending"]::before    { background: #cbd5e1; }
+
+/* ── Card body ── */
+.ap-card__body {
+  display: flex;
+  flex: 1;
+  gap: 16px;
+  padding: 16px 18px;
+  min-width: 0;
+}
+
+/* ── Card left (info) ── */
+.ap-card__left {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* User row */
+.ap-card__user-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.ap-card__username {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+  margin-bottom: 3px;
+}
+
+.ap-card__phone {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* Status badge */
+.ap-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.ap-status--pending   { background: var(--surface-2); color: var(--text-muted); border: 1px solid var(--border-strong); }
+.ap-status--scheduled,
+.ap-status--picked    { background: var(--amber-soft); color: var(--amber); border: 1px solid var(--amber-border); }
+.ap-status--collected,
+.ap-status--completed { background: var(--green-soft); color: var(--green-deeper); border: 1px solid var(--green-border); }
+
+/* Fields */
+.ap-card__fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 6px 16px;
+  margin-bottom: 10px;
+}
+
+.ap-field {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ap-field__label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+.ap-field__value {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+/* Image */
+.ap-card__image {
+  max-width: 200px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border-strong);
+  display: block;
+  margin-top: 4px;
+  object-fit: cover;
+}
+
+/* ── Card right (actions) ── */
+.ap-card__right {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  align-items: stretch;
+  justify-content: flex-start;
+  min-width: 148px;
+  padding: 16px 18px 16px 0;
+}
+
+/* ── Timestamp ── */
+.ap-card__time {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+  text-align: right;
+  padding-top: 2px;
+}
+
+/* ============================================================
+   FOOTER — load more / back link
+   ============================================================ */
+.ap-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  margin-top: 20px;
+}
+
+.ap-back-link {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--green-dark);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: color var(--t), transform var(--t);
+}
+.ap-back-link:hover { color: var(--green-deeper); transform: translateX(-2px); }
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width: 980px) {
+  .collector-main { padding: 16px 16px 48px; }
+  .collector-title { font-size: 19px; }
+}
+
+@media (max-width: 640px) {
+  .ap-card__body { flex-direction: column; gap: 12px; }
+  .ap-card__right {
+    flex-direction: row;
+    flex-wrap: wrap;
+    min-width: 0;
+    padding: 0 16px 14px;
+  }
+  .ap-card__right .ap-btn { flex: 1; min-width: 0; }
+  .ap-card__time { display: none; }
+  .ap-card__fields { grid-template-columns: repeat(2, 1fr); }
+  .ap-card__image { max-width: 100%; }
+}

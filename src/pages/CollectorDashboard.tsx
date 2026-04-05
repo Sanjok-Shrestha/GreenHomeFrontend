@@ -1,503 +1,658 @@
 import { useCallback, useContext, useEffect, useMemo, useState, type JSX } from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
 import { AuthContext } from "../App";
+import CollectorSidebar from "../components/CollectorSidebar";
 
-type User = { name?: string; email?: string };
-type Stat = { label: string; value: string | number };
-type PickupPreview = {
-  _id: string;
-  wasteType: string;
-  quantity: number;
-  status?: string;
-  createdAt?: string;
-  user?: { name?: string };
-  image?: string | null;
-};
-
-const NAV_LINKS = [
-  { to: "/collector", label: "Overview", key: "overview" },
-  { to: "/collector/assigned", label: "Assigned Pickups", key: "assigned" },
-  { to: "/collector/earnings", label: "Earnings", key: "earnings" },
-  { to: "/collector/history", label: "Pickup History", key: "history" },
-  { to: "/collector/analytics", label: "Performance / Analytics", key: "analytics" },
-  { to: "/profile", label: "Profile", key: "profile" },
-];
-
-/**
- * CollectorDashboard (refined)
- *
- * Note: changed "View" links for pickups to point to the collector history/detail route:
- *   /collector/history/:pickupId
- *
- * Ensure your router defines a route that accepts that path and shows the pickup history/details.
- */
-
-/* ---------------------- scoped styles (in-file) ---------------------- */
+/* ─────────────────────────── Styles ─────────────────────────── */
 const css = `
-:root{
-  --bg: #f5faf6;
-  --card: #fff;
-  --muted: #6b7a72;
-  --text: #0b2a1a;
-  --accent: #1db954;
-  --accent-600: #0ea158;
-  --accent-700: #0a8a3f;
-  --danger: #e23b3b;
-  --glass: rgba(255,255,255,0.6);
-  --radius: 12px;
-  --shadow-sm: 0 6px 18px rgba(14,40,18,0.06);
-  --shadow-md: 0 18px 48px rgba(11,36,18,0.08);
-  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
-}
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
-/* layout */
-.collector-root { display:flex; min-height:100vh; background: linear-gradient(180deg,var(--bg), #eef9ee 140%); color:var(--text); }
-.collector-sidebar {
-  width: 260px;
-  background: linear-gradient(180deg,#16382f,#123023);
-  color: #fff;
-  padding: 20px;
-  box-shadow: 2px 0 12px rgba(0,0,0,0.06);
-  display:flex; flex-direction:column;
-  gap: 12px;
-  position: sticky; top:0; height:100vh;
-}
-.collector-brand { display:flex; align-items:center; gap:12px; }
-.collector-brand .icon { font-size:22px; }
-.collector-brand .title { font-weight:700; font-size:18px; letter-spacing:0.2px; }
-.collector-toggle { margin-left:auto; background:transparent; border:none; color:rgba(255,255,255,0.9); cursor:pointer; }
+  *, *::before, *::after { box-sizing: border-box; }
 
-.collector-nav { display:flex; flex-direction:column; gap:6px; margin-top:6px; }
-.collector-nav a {
-  display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:8px; color: #e6eef0; text-decoration:none;
-  transition: background .14s, transform .12s;
-}
-.collector-nav a:hover { background: rgba(255,255,255,0.03); transform: translateY(-1px); }
-.collector-nav a.active { background: rgba(255,255,255,0.06); color:#fff; font-weight:700; }
+  :root {
+    --bg:           #f1f4f2;
+    --surface:      #ffffff;
+    --surface-2:    #f7faf8;
+    --surface-3:    #edf6f0;
+    --border:       #e3eae5;
+    --border-2:     #ccd9d0;
+    --green:        #18a34a;
+    --green-2:      #22c55e;
+    --green-soft:   #e8f5ed;
+    --green-glow:   rgba(24,163,74,.18);
+    --text-1:       #0d1f15;
+    --text-2:       #4b6358;
+    --text-3:       #8fa89a;
+    --danger:       #dc2626;
+    --warn:         #d97706;
+    --warn-soft:    #fef9ee;
+    --mono:         'IBM Plex Mono', monospace;
+    --font:         'Plus Jakarta Sans', system-ui, sans-serif;
+    --ease:         cubic-bezier(.4,0,.2,1);
+    --ease-spring:  cubic-bezier(.34,1.28,.64,1);
+    --r-sm:         8px;
+    --r-md:         12px;
+    --r-lg:         16px;
+    --r-xl:         20px;
+    --sh-sm:        0 1px 4px rgba(0,0,0,.05), 0 1px 2px rgba(0,0,0,.04);
+    --sh-md:        0 6px 20px rgba(0,0,0,.07), 0 2px 6px rgba(0,0,0,.04);
+    --sh-lg:        0 20px 48px rgba(0,0,0,.1), 0 6px 16px rgba(0,0,0,.05);
+  }
 
-.collector-footer { margin-top:auto; display:flex; flex-direction:column; gap:8px; border-top:1px solid rgba(255,255,255,0.04); padding-top:12px; }
+  /* ── Root layout ── */
+  .cd-root {
+    display: flex;
+    min-height: 100vh;
+    background: var(--bg);
+    font-family: var(--font);
+    color: var(--text-1);
+    -webkit-font-smoothing: antialiased;
+  }
 
-.collector-main { flex:1; padding: 28px; box-sizing:border-box; max-width:1200px; margin:0 auto; }
-.collector-header { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:18px; }
-.collector-title { margin:0; font-size:28px; font-weight:800; color:var(--text); }
-.collector-sub { margin:4px 0 0; color:var(--muted); font-size:13px; }
+  /* ── Main ── */
+  .cd-main {
+    flex: 1;
+    padding: 32px 28px 48px;
+    max-width: 1200px;
+    min-width: 0;
+    animation: cd-in 280ms var(--ease) both;
+  }
 
-/* stats row */
-.stats-row { display:flex; gap:12px; align-items:center; }
-.stat { background:var(--card); padding:8px 12px; border-radius:10px; box-shadow:var(--shadow-sm); text-align:center; min-width:120px; }
-.stat .value { font-weight:800; font-size:18px; }
-.stat .label { font-size:12px; color:var(--muted); }
+  @keyframes cd-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
 
-/* grid */
-.grid { display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap; }
-.col-left { flex:1; min-width:320px; }
-.col-right { width:340px; }
+  /* ── Header ── */
+  .cd-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
 
-/* card */
-.card { background:var(--card); padding:16px; border-radius:var(--radius); box-shadow:var(--shadow-sm); transition: transform .12s, box-shadow .12s; }
-.card:hover { transform: translateY(-4px); box-shadow:var(--shadow-md); }
-.card-title { margin:0 0 10px 0; font-size:16px; font-weight:700; }
+  .cd-title {
+    margin: 0 0 4px;
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.4px;
+    color: var(--text-1);
+  }
 
-/* quick actions */
-.actions { display:flex; gap:12px; flex-wrap:wrap; }
-.action { display:flex; gap:12px; padding:10px 12px; border-radius:10px; background:#f7fff7; text-decoration:none; color:var(--text); min-width:170px; align-items:center; }
-.action .icon { width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:10px; background: #eafaf0; font-size:20px; }
+  .cd-sub {
+    font-size: 13.5px;
+    color: var(--text-2);
+  }
 
-/* lists */
-.list { display:flex; flex-direction:column; gap:10px; margin-top:8px; }
-.list-item { display:flex; justify-content:space-between; gap:12px; align-items:center; padding:10px; border-radius:10px; border:1px solid #f1f1f1; background: linear-gradient(90deg,#fff,#f7fff7); }
-.list-item .meta { max-width: 68%; }
-.list-item .meta .title { font-weight:700; margin-bottom:6px; }
-.list-item .meta .sub { color:var(--muted); font-size:13px; }
-.list-actions { display:flex; gap:8px; align-items:center; }
+  .cd-header__right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
 
-/* buttons */
-.btn { padding:8px 10px; border-radius:8px; background:#fff; border:1px solid #e6efe6; cursor:pointer; font-weight:700; }
-.btn.primary { background: linear-gradient(90deg,var(--accent),var(--accent-700)); color: #fff; border:none; box-shadow: 0 8px 18px rgba(17,120,68,0.12); }
-.btn.ghost { background: transparent; border:1px solid #e6efe6; color:var(--text); }
+  /* ── KPI strip ── */
+  .cd-kpis {
+    display: flex;
+    gap: 8px;
+  }
 
-/* right column */
-.right-card .big { font-size:28px; font-weight:800; color:#2c3e50; margin-top:8px; }
+  .cd-kpi {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 10px 16px;
+    text-align: center;
+    box-shadow: var(--sh-sm);
+    min-width: 100px;
+    transition: transform 140ms var(--ease), box-shadow 140ms var(--ease);
+    animation: cd-kpi-in 360ms var(--ease-spring) both;
+  }
 
-/* small helpers */
-.view-link { color: var(--accent); text-decoration:none; font-weight:700; }
-.badge { padding:6px 10px; border-radius:8px; font-weight:700; font-size:12px; background:#f2f4f7; color:#333; text-transform:capitalize; }
+  .cd-kpi:nth-child(1) { animation-delay:  50ms; }
+  .cd-kpi:nth-child(2) { animation-delay: 100ms; }
+  .cd-kpi:nth-child(3) { animation-delay: 150ms; }
 
-/* skeleton */
-.skeleton { background: linear-gradient(90deg,#f3f8f3 0,#eef9ee 50%, #f3f8f3 100%); background-size:200% 100%; animation: shimmer 1.2s linear infinite; border-radius:8px; }
-@keyframes shimmer { 0% { background-position:200% 0 } 100% { background-position:-200% 0 } }
+  .cd-kpi:hover { transform: translateY(-2px); box-shadow: var(--sh-md); }
 
-/* responsive */
-@media (max-width: 980px) {
-  .collector-sidebar { display:none; }
-  .collector-main { padding:16px; }
-  .col-right { width:100%; order: 2; }
-  .col-left { order: 1; }
-}
+  @keyframes cd-kpi-in {
+    from { opacity: 0; transform: translateY(10px) scale(.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .cd-kpi__value {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    color: var(--text-1);
+    font-family: var(--mono);
+  }
+
+  .cd-kpi__label {
+    font-size: 11px;
+    color: var(--text-3);
+    margin-top: 3px;
+    font-weight: 600;
+    letter-spacing: .3px;
+    text-transform: uppercase;
+  }
+
+  /* ── Avatar button ── */
+  .cd-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--green), #0f7a35);
+    color: #fff;
+    border: none;
+    font-family: var(--font);
+    font-weight: 800;
+    font-size: 16px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px var(--green-glow);
+    transition: transform 140ms var(--ease), box-shadow 140ms var(--ease);
+    flex-shrink: 0;
+  }
+
+  .cd-avatar:hover {
+    transform: scale(1.07);
+    box-shadow: 0 6px 18px var(--green-glow);
+  }
+
+  /* ── Grid ── */
+  .cd-grid {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+
+  .cd-col-left  { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+  .cd-col-right { width: 320px; flex-shrink: 0; display: flex; flex-direction: column; gap: 14px; }
+
+  @media (max-width: 960px) {
+    .cd-grid { flex-direction: column; }
+    .cd-col-right { width: 100%; }
+  }
+
+  /* ── Card ── */
+  .cd-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-xl);
+    padding: 18px 20px;
+    box-shadow: var(--sh-sm);
+    transition: box-shadow 160ms var(--ease);
+  }
+
+  .cd-card:hover { box-shadow: var(--sh-md); }
+
+  .cd-card__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+
+  .cd-card__title {
+    margin: 0;
+    font-size: 14.5px;
+    font-weight: 700;
+    letter-spacing: -0.1px;
+    color: var(--text-1);
+  }
+
+  .cd-card__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* ── List ── */
+  .cd-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  /* ── List item (horizontal) ── */
+  .cd-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 14px;
+    border-radius: var(--r-md);
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    transition: border-color 130ms, background 130ms, transform 130ms var(--ease);
+    cursor: pointer;
+  }
+
+  .cd-item:hover {
+    border-color: var(--border-2);
+    background: var(--surface);
+    transform: translateX(2px);
+  }
+
+  .cd-item__meta { flex: 1; min-width: 0; }
+
+  .cd-item__title {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--text-1);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 3px;
+  }
+
+  .cd-item__sub {
+    font-size: 12px;
+    color: var(--text-2);
+    font-family: var(--mono);
+  }
+
+  .cd-item__time {
+    font-size: 11px;
+    color: var(--text-3);
+    margin-top: 3px;
+  }
+
+  .cd-item__aside {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  /* ── List item vertical (available pickups) ── */
+  .cd-item--v {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .cd-item--v:hover { transform: none; }
+
+  .cd-item--v .cd-item__meta { width: 100%; }
+
+  .cd-item--v .cd-item__aside {
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  /* ── Badge ── */
+  .cd-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: .2px;
+    text-transform: capitalize;
+    white-space: nowrap;
+  }
+
+  /* ── Buttons ── */
+  .cd-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 7px 13px;
+    border-radius: var(--r-sm);
+    border: 1.5px solid var(--border);
+    background: var(--surface);
+    color: var(--text-1);
+    font-family: var(--font);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 130ms, background 130ms, transform 130ms var(--ease), box-shadow 130ms;
+    outline: none;
+    white-space: nowrap;
+  }
+
+  .cd-btn:hover:not(:disabled) {
+    border-color: var(--border-2);
+    background: var(--surface-2);
+    transform: translateY(-1px);
+    box-shadow: var(--sh-sm);
+  }
+
+  .cd-btn:active:not(:disabled) { transform: translateY(0); }
+  .cd-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+  .cd-btn--primary {
+    background: var(--green);
+    border-color: var(--green);
+    color: #fff;
+  }
+
+  .cd-btn--primary:hover:not(:disabled) {
+    background: #15903f;
+    border-color: #15903f;
+    box-shadow: 0 4px 14px var(--green-glow);
+  }
+
+  .cd-btn--sm { padding: 5px 10px; font-size: 12px; }
+
+  /* ── View link ── */
+  .cd-link {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--green);
+    text-decoration: none;
+    transition: color 120ms;
+  }
+
+  .cd-link:hover { color: #15903f; text-decoration: underline; }
+
+  /* ── Earnings card (removed) ── */
+
+  /* ── Tips list ── */
+  .cd-tips {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .cd-tips li {
+    display: flex;
+    gap: 9px;
+    align-items: flex-start;
+    font-size: 13px;
+    color: var(--text-2);
+    line-height: 1.5;
+  }
+
+  .cd-tips li::before {
+    content: '✓';
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--green);
+    background: var(--green-soft);
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  /* ── Skeleton ── */
+  .cd-skeleton {
+    background: linear-gradient(90deg, #eaede9 0%, #f4f6f3 50%, #eaede9 100%);
+    background-size: 200% 100%;
+    animation: cd-shimmer 1.3s ease infinite;
+    border-radius: var(--r-sm);
+  }
+
+  @keyframes cd-shimmer {
+    from { background-position: 200% 0; }
+    to   { background-position: -200% 0; }
+  }
+
+  .cd-skeleton-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+
+  /* ── Empty / Error ── */
+  .cd-empty {
+    font-size: 13px;
+    color: var(--text-3);
+    padding: 10px 0;
+    text-align: center;
+  }
+
+  .cd-error {
+    font-size: 13px;
+    color: var(--danger);
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: var(--r-sm);
+    padding: 10px 14px;
+    margin-top: 4px;
+  }
+
+  /* ── Divider ── */
+  .cd-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 14px 0;
+  }
 `;
 
-/* ---------------------- helper functions ---------------------- */
-function iconFor(key: string) {
-  switch (key) {
-    case "overview":
-      return "🏠";
-    case "assigned":
-      return "📦";
-    case "earnings":
-      return "💰";
-    case "history":
-      return "📜";
-    case "analytics":
-      return "📈";
-    case "profile":
-      return "👤";
-    default:
-      return "•";
-  }
-}
-function badgeBg(status?: string) {
+/* ─────────────────────────── Helpers ─────────────────────────── */
+function badgeStyle(status?: string): React.CSSProperties {
   const s = (status ?? "").toLowerCase();
-  if (s.includes("completed")) return "#e6ffef";
-  if (s.includes("picked")) return "#fff8e6";
-  return "#f2f4f7";
+  if (s.includes("completed")) return { background: "#dcfce7", color: "#15803d" };
+  if (s.includes("picked"))    return { background: "#fef9c3", color: "#854d0e" };
+  if (s.includes("progress"))  return { background: "#dbeafe", color: "#1d4ed8" };
+  if (s.includes("pending"))   return { background: "#fef3c7", color: "#b45309" };
+  return { background: "#f3f4f6", color: "#4b5563" };
 }
 
-/* ---------------------- component ---------------------- */
+type AuthContextShape = { user?: any; roleState?: string; setAuthState?: (s: { isAuth: boolean; roleState: string }) => void };
+type User         = { name?: string; email?: string };
+type Stat         = { label: string; value: string | number };
+type PickupPreview = {
+  _id: string; wasteType: string; quantity: number;
+  status?: string; createdAt?: string; user?: { name?: string }; image?: string | null;
+};
+
+/* ─────────────────────────── Component ─────────────────────────── */
 export default function CollectorDashboard(): JSX.Element {
   const navigate = useNavigate();
-  const { setAuthState } = useContext(AuthContext);
+  const auth = useContext(AuthContext) as AuthContextShape | undefined;
 
-  const [user, setUser] = useState<User | null>(null);
-  const [collapsed, setCollapsed] = useState<boolean>(false);
-
-  const [stats, setStats] = useState<Stat[]>([
-    { label: "Assigned", value: "—" },
+  const [user, setUser]           = useState<User | null>(null);
+  const [stats, setStats]         = useState<Stat[]>([
+    { label: "Assigned",          value: "—" },
     { label: "Completed (month)", value: "—" },
-    { label: "Kg Collected", value: "—" },
+    { label: "Kg Collected",      value: "—" },
   ]);
-
-  const [recent, setRecent] = useState<PickupPreview[]>([]);
+  const [recent, setRecent]               = useState<PickupPreview[]>([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
-
-  const [available, setAvailable] = useState<PickupPreview[]>([]);
-  const [loadingAvailable, setLoadingAvailable] = useState<boolean>(false);
-  const [assigningIds, setAssigningIds] = useState<Record<string, boolean>>({});
-  const [availableError, setAvailableError] = useState<string | null>(null);
+  const [available, setAvailable]                 = useState<PickupPreview[]>([]);
+  const [loadingAvailable, setLoadingAvailable]   = useState(false);
+  const [availableError, setAvailableError]       = useState<string | null>(null);
+  const [assigningIds, setAssigningIds]           = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const raw = localStorage.getItem("user");
-    if (raw) {
-      try {
-        setUser(JSON.parse(raw));
-      } catch {
-        setUser(null);
-      }
-    }
+    if (raw) { try { setUser(JSON.parse(raw)); } catch { setUser(null); } }
   }, []);
 
-  useEffect(() => {
-    const onResize = () => setCollapsed(window.innerWidth < 880);
-    onResize();
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
-
-  // load stats + recent
   useEffect(() => {
     let mounted = true;
     (async () => {
       setLoadingRecent(true);
       try {
         const [statsRes, recentRes] = await Promise.allSettled([
-          api.get("/api/collector/stats").catch(() => null),
-          api.get("/api/waste/collector/assigned?limit=5").catch(() => null),
+          // FIXED: call without duplicating "/api"
+          api.get("/collector/stats").catch(() => null),
+          api.get("/waste/collector/assigned?limit=5").catch(() => null),
         ]);
-
         if (!mounted) return;
-
-        if (statsRes && statsRes.status === "fulfilled" && statsRes.value?.data) {
+        if (statsRes.status === "fulfilled" && statsRes.value?.data) {
           const d = statsRes.value.data;
           setStats([
-            { label: "Assigned", value: d.assigned ?? 0 },
+            { label: "Assigned",          value: d.assigned      ?? 0 },
             { label: "Completed (month)", value: d.completedMonth ?? 0 },
-            { label: "Kg Collected", value: d.kgCollected ?? 0 },
+            { label: "Kg Collected",      value: d.kgCollected    ?? 0 },
           ]);
         }
-
-        if (recentRes && recentRes.status === "fulfilled" && recentRes.value?.data) {
+        if (recentRes.status === "fulfilled" && recentRes.value?.data) {
           const arr = Array.isArray(recentRes.value.data) ? recentRes.value.data : recentRes.value.data?.data ?? [];
-          setRecent(
-            arr.slice(0, 5).map((p: any) => ({
-              _id: p._id ?? p.id ?? String(Math.random()).slice(2),
-              wasteType: p.wasteType ?? p.type ?? "Unknown",
-              quantity: p.quantity ?? 0,
-              status: p.status ?? "unknown",
-              createdAt: p.createdAt ?? p.created_at,
-              user: p.user ?? undefined,
-            }))
-          );
-        } else {
-          setRecent([]);
-        }
-      } catch (e) {
-        console.warn("Load error", e);
-        setRecent([]);
-      } finally {
-        if (mounted) setLoadingRecent(false);
-      }
+          setRecent(arr.slice(0, 5).map((p: any) => ({
+            _id: p._id ?? p.id ?? String(Math.random()).slice(2),
+            wasteType: p.wasteType ?? p.type ?? "Unknown",
+            quantity:  p.quantity ?? 0,
+            status:    p.status ?? "unknown",
+            createdAt: p.createdAt ?? p.created_at,
+            user:      p.user ?? undefined,
+          })));
+        } else setRecent([]);
+      } catch (e) { setRecent([]); }
+      finally { if (mounted) setLoadingRecent(false); }
     })();
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, []);
 
-  /* fetch available pickups (stable reference) */
   const fetchAvailable = useCallback(async () => {
     setLoadingAvailable(true);
     setAvailableError(null);
     try {
-      const res = await api.get("/api/waste/available?limit=6");
+      // FIXED: call without duplicating "/api"
+      const res = await api.get("/waste/available?limit=6");
       const raw = res?.data;
-      let arr: any[] = [];
-      if (Array.isArray(raw)) arr = raw;
-      else if (Array.isArray(raw?.data)) arr = raw.data;
-      else if (Array.isArray(raw?.items)) arr = raw.items;
-      else if (raw && typeof raw === "object") {
-        const guess = raw.data ?? raw.items ?? raw.result;
-        if (Array.isArray(guess)) arr = guess;
-      }
-      const mapped = arr.map((p: any) => ({
-        _id: p._id ?? p.id ?? String(Math.random()).slice(2),
+      let arr: any[] = Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : Array.isArray(raw?.items) ? raw.items : [];
+      setAvailable(arr.slice(0, 6).map((p: any) => ({
+        _id:       p._id ?? p.id ?? String(Math.random()).slice(2),
         wasteType: p.wasteType ?? p.type ?? "Unknown",
-        quantity: p.quantity ?? 0,
-        status: p.status ?? "pending",
+        quantity:  p.quantity ?? 0,
+        status:    p.status ?? "pending",
         createdAt: p.createdAt ?? p.created_at,
-        user: p.user ?? p.requester ?? undefined,
-        image: p.image ?? p.imageUrl ?? null,
-      }));
-      setAvailable(mapped.slice(0, 6));
+        user:      p.user ?? p.requester ?? undefined,
+        image:     p.image ?? p.imageUrl ?? null,
+      })));
     } catch (err: any) {
-      console.error("fetchAvailable error:", err);
       setAvailableError(err?.response?.data?.message || err?.message || "Failed to load available pickups");
-    } finally {
-      setLoadingAvailable(false);
-    }
+    } finally { setLoadingAvailable(false); }
   }, []);
 
   useEffect(() => {
     fetchAvailable();
-    const id = setInterval(() => fetchAvailable(), 30000);
+    const id = setInterval(fetchAvailable, 30_000);
     return () => clearInterval(id);
   }, [fetchAvailable]);
 
-  const logout = useCallback(() => {
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    localStorage.removeItem("role");
-    try {
-      setAuthState({ isAuth: false, roleState: "" });
-    } catch {}
-    navigate("/login", { replace: true });
-  }, [navigate, setAuthState]);
-
-  const firstName = useMemo(() => user?.name?.split?.(" ")?.[0] ?? "Collector", [user]);
-
   const setAssigning = useCallback((id: string, v: boolean) => {
-    setAssigningIds((s) => {
-      const copy = { ...s };
-      if (v) copy[id] = true;
-      else delete copy[id];
-      return copy;
-    });
+    setAssigningIds((s) => { const c = { ...s }; if (v) c[id] = true; else delete c[id]; return c; });
   }, []);
 
-  const claimPickup = useCallback(
-    async (id: string) => {
-      if (!window.confirm("Assign this pickup to yourself?")) return;
-      setAssigning(id, true);
-      const prev = available;
-      setAvailable((cur) => cur.filter((x) => x._id !== id));
-      try {
-        const res = await api.post(`/api/waste/${id}/assign`);
-        if (res?.data?.error) throw new Error(res.data.error || "Assign failed");
-        await fetchAvailable();
-        window.alert("Pickup assigned to you. Check Assigned Pickups.");
-        // optionally navigate to assigned page
-        navigate("/collector/assigned");
-      } catch (err: any) {
-        console.error("claim failed", err);
-        setAvailable(prev); // rollback
-        setAvailableError(err?.response?.data?.message || err?.message || "Failed to assign pickup");
-        setTimeout(() => setAvailableError(null), 3000);
-      } finally {
-        setAssigning(id, false);
-      }
-    },
-    [available, fetchAvailable, setAssigning, navigate]
+  const claimPickup = useCallback(async (id: string) => {
+    if (!window.confirm("Assign this pickup to yourself?")) return;
+    setAssigning(id, true);
+    const prev = available;
+    setAvailable((cur) => cur.filter((x) => x._id !== id));
+    try {
+      // FIXED: call without duplicating "/api"
+      const res = await api.post(`/waste/${id}/assign`);
+      if (res?.data?.error) throw new Error(res.data.error);
+      await fetchAvailable();
+      window.alert("Pickup assigned! Check Assigned Pickups.");
+      navigate("/collector/assigned");
+    } catch (err: any) {
+      setAvailable(prev);
+      setAvailableError(err?.response?.data?.message || err?.message || "Failed to assign pickup");
+      setTimeout(() => setAvailableError(null), 3000);
+    } finally { setAssigning(id, false); }
+  }, [available, fetchAvailable, navigate, setAssigning]);
+
+  const logout = useCallback(() => {
+    ["accessToken","token","user","role"].forEach((k) => localStorage.removeItem(k));
+    try { auth?.setAuthState?.({ isAuth: false, roleState: "" }); } catch {}
+    navigate("/login", { replace: true });
+  }, [navigate, auth]);
+
+  const firstName = useMemo(() => user?.name?.split(" ")?.[0] ?? "Collector", [user]);
+
+  /* ─── Skeleton rows ─── */
+  const SkeletonRows = () => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {[0,1,2].map((i) => (
+        <div key={i} className="cd-skeleton-row">
+          <div className="cd-skeleton" style={{ width: 40, height: 40, borderRadius: 8 }} />
+          <div style={{ flex: 1 }}>
+            <div className="cd-skeleton" style={{ height: 11, marginBottom: 6 }} />
+            <div className="cd-skeleton" style={{ height: 9, width: "55%" }} />
+          </div>
+          <div className="cd-skeleton" style={{ width: 64, height: 26, borderRadius: 999 }} />
+        </div>
+      ))}
+    </div>
   );
 
-  useEffect(() => {
-    console.debug("CollectorDashboard mounted, collapsed:", collapsed);
-  }, [collapsed]);
-
   return (
-    <div className="collector-root" role="application">
+    <div className="cd-root" role="application">
       <style>{css}</style>
+      <CollectorSidebar />
 
-      <aside
-        className="collector-sidebar"
-        style={{ width: collapsed ? 88 : 260 }}
-        aria-label="Collector navigation"
-      >
-        <div className="collector-brand" style={{ gap: 8 }}>
-          <div className="icon" aria-hidden>🚚</div>
-          {!collapsed && <div className="title">Collector</div>}
-          <button
-            aria-label="Toggle sidebar"
-            title="Toggle"
-            onClick={() => setCollapsed((v) => !v)}
-            className="collector-toggle"
-            style={{ marginLeft: "auto" }}
-          >
-            {collapsed ? "»" : "«"}
-          </button>
-        </div>
+      <main className="cd-main" role="main">
 
-        <nav className="collector-nav" aria-label="Collector links">
-          {NAV_LINKS.map((l) => (
-            <NavLink
-              key={l.to}
-              to={l.to}
-              className={({ isActive }) => "nav-link" + (isActive ? " active" : "")}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "10px 12px",
-                borderRadius: 8,
-                color: "#e6eef0",
-                textDecoration: "none",
-                justifyContent: collapsed ? "center" : "flex-start",
-              }}
-            >
-              <span style={{ width: 28, textAlign: "center" }} aria-hidden>
-                {iconFor(l.key)}
-              </span>
-              {!collapsed && <span>{l.label}</span>}
-            </NavLink>
-          ))}
-        </nav>
-
-        <div className="collector-footer" style={{ marginTop: "auto" }}>
-          {!collapsed && <div style={{ fontWeight: 700 }}>{user?.name ?? firstName}</div>}
-          <button onClick={logout} style={{ marginTop: 8, padding: "8px 10px", borderRadius: 8, background: "#e74c3c", color: "#fff", border: "none", cursor: "pointer" }}>
-            <span style={{ marginRight: 8 }}>🚪</span>
-            {!collapsed && "Logout"}
-          </button>
-        </div>
-      </aside>
-
-      <main className="collector-main" role="main">
-        <header className="collector-header" aria-hidden={false}>
+        {/* ── Header ── */}
+        <header className="cd-header">
           <div>
-            <h1 className="collector-title">Welcome, {firstName}!</h1>
-            <div className="collector-sub">Manage your pickups, view earnings and track performance</div>
+            <h1 className="cd-title">Welcome, {firstName}!</h1>
+            <p className="cd-sub">Manage your pickups, view earnings and track performance</p>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div className="stats-row" role="region" aria-label="Quick stats">
+          <div className="cd-header__right">
+            <div className="cd-kpis" role="region" aria-label="Quick stats">
               {stats.map((s) => (
-                <div key={s.label} className="stat" title={String(s.label)}>
-                  <div className="value" aria-live="polite">{s.value}</div>
-                  <div className="label">{s.label}</div>
+                <div key={s.label} className="cd-kpi" title={String(s.label)}>
+                  <div className="cd-kpi__value" aria-live="polite">{s.value}</div>
+                  <div className="cd-kpi__label">{s.label}</div>
                 </div>
               ))}
             </div>
 
-            <button
-              aria-label={user?.name ?? "Collector profile"}
-              title={user?.name ?? "Collector profile"}
-              style={{ width: 52, height: 52, borderRadius: "50%", background: "linear-gradient(90deg,#19bd4a,#0ea158)", color: "#fff", border: "none", fontWeight: 800 }}
-            >
-              {(user?.name?.charAt?.(0) ?? "C").toUpperCase()}
+            <button className="cd-avatar" onClick={() => navigate("/profile")}
+              aria-label={user?.name ?? "Profile"} title={user?.name ?? "Profile"}>
+              {(user?.name?.charAt(0) ?? "C").toUpperCase()}
             </button>
           </div>
         </header>
 
-        <section className="grid">
-          <div className="col-left">
-            <div className="card">
-              <h3 className="card-title">Quick Actions</h3>
-              <div className="actions" role="toolbar" aria-label="Quick actions">
-                <Link to="/collector/assigned" className="action" aria-label="Assigned pickups">
-                  <div className="icon">📦</div>
-                  <div>
-                    <div style={{ fontWeight: 800 }}>Assigned</div>
-                    <div style={{ fontSize: 13, color: "var(--muted)" }}>View assigned pickups</div>
-                  </div>
-                </Link>
+        {/* ── Body grid ── */}
+        <section className="cd-grid">
 
-                <Link to="/collector/earnings" className="action" aria-label="Earnings">
-                  <div className="icon">💰</div>
-                  <div>
-                    <div style={{ fontWeight: 800 }}>Earnings</div>
-                    <div style={{ fontSize: 13, color: "var(--muted)" }}>Check payouts</div>
-                  </div>
-                </Link>
+          {/* ── Left column ── */}
+          <div className="cd-col-left">
 
-                <Link to="/collector/history" className="action" aria-label="History">
-                  <div className="icon">📜</div>
-                  <div>
-                    <div style={{ fontWeight: 800 }}>History</div>
-                    <div style={{ fontSize: 13, color: "var(--muted)" }}>Past pickups</div>
-                  </div>
-                </Link>
+            {/* Recent assigned */}
+            <div className="cd-card">
+              <div className="cd-card__head">
+                <h3 className="cd-card__title">Recent Assigned Pickups</h3>
+                <Link to="/collector/assigned" className="cd-link">See all →</Link>
               </div>
-            </div>
 
-            <div style={{ height: 14 }} />
-
-            <div className="card">
-              <h3 className="card-title">Recent Assigned Pickups</h3>
-              {loadingRecent ? (
-                <div style={{ display: "grid", gap: 8 }}>
-                  {Array.from({ length: 3 }).map((_, i) => (
-                    <div key={i} style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                      <div style={{ width: 44, height: 44 }} className="skeleton" />
-                      <div style={{ flex: 1 }}>
-                        <div style={{ height: 12 }} className="skeleton" />
-                        <div style={{ height: 10, marginTop: 8, width: "50%" }} className="skeleton" />
-                      </div>
-                      <div style={{ width: 60 }} className="skeleton" />
-                    </div>
-                  ))}
-                </div>
-              ) : recent.length === 0 ? (
-                <p style={{ color: "#666" }}>No recent pickups assigned.</p>
+              {loadingRecent ? <SkeletonRows /> : recent.length === 0 ? (
+                <div className="cd-empty">No recent pickups assigned.</div>
               ) : (
-                <ul className="list" aria-live="polite">
+                <ul className="cd-list" aria-live="polite">
                   {recent.map((p) => (
-                    <li key={p._id} className="list-item">
-                      <div
-                        className="meta"
-                        style={{ cursor: "pointer" }}
-                        onClick={() => navigate(`/collector/history/${p._id}`)}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") navigate(`/collector/history/${p._id}`);
-                        }}
-                        aria-label={`Open pickup ${p.wasteType} history`}
-                      >
-                        <div className="title">{p.wasteType}</div>
-                        <div className="sub">{p.quantity} kg • {p.createdAt ? new Date(p.createdAt).toLocaleString() : ""}</div>
+                    <li key={p._id} className="cd-item"
+                      onClick={() => navigate(`/collector/history/${p._id}`)}
+                      role="button" tabIndex={0}
+                      onKeyDown={(e) => e.key === "Enter" && navigate(`/collector/history/${p._id}`)}>
+                      <div className="cd-item__meta">
+                        <div className="cd-item__title">{p.wasteType}</div>
+                        <div className="cd-item__sub">{p.quantity} kg</div>
+                        {p.createdAt && <div className="cd-item__time">{new Date(p.createdAt).toLocaleString()}</div>}
                       </div>
-                      <div className="list-actions">
-                        <span className="badge" style={{ background: badgeBg(p.status) }}>{p.status ?? "unknown"}</span>
-                        {/* Link changed: go to collector history page for details */}
-                        <Link to={`/collector/history/${p._id}`} className="view-link">View</Link>
+                      <div className="cd-item__aside">
+                        <span className="cd-badge" style={badgeStyle(p.status)}>{p.status ?? "unknown"}</span>
+                        <Link to={`/collector/history/${p._id}`} className="cd-link"
+                          onClick={(e) => e.stopPropagation()}>View</Link>
                       </div>
                     </li>
                   ))}
@@ -505,46 +660,44 @@ export default function CollectorDashboard(): JSX.Element {
               )}
             </div>
 
-            <div style={{ height: 14 }} />
-
-            <div className="card">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <h3 className="card-title">Available Pickups</h3>
-                <div>
-                  <button className="btn" onClick={() => fetchAvailable()} disabled={loadingAvailable}>{loadingAvailable ? "Refreshing…" : "Refresh"}</button>
-                  <Link to="/collector/available" className="view-link" style={{ marginLeft: 10 }}>See all available →</Link>
+            {/* Available pickups */}
+            <div className="cd-card">
+              <div className="cd-card__head">
+                <h3 className="cd-card__title">Available Pickups</h3>
+                <div className="cd-card__actions">
+                  <button className="cd-btn cd-btn--sm" onClick={fetchAvailable} disabled={loadingAvailable}>
+                    {loadingAvailable ? "Refreshing…" : "↻ Refresh"}
+                  </button>
+                  <Link to="/collector/available" className="cd-link">See all →</Link>
                 </div>
               </div>
 
               {loadingAvailable ? (
-                <div style={{ marginTop: 12 }}>
-                  <div style={{ height: 12 }} className="skeleton" />
-                  <div style={{ height: 12, marginTop: 8 }} className="skeleton" />
-                </div>
+                <div className="cd-skeleton" style={{ height: 40, borderRadius: 8 }} />
               ) : availableError ? (
-                <div style={{ marginTop: 12, color: "crimson" }}>{availableError}</div>
+                <div className="cd-error">{availableError}</div>
               ) : available.length === 0 ? (
-                <p style={{ color: "#666" }}>No unassigned pickups right now.</p>
+                <div className="cd-empty">No unassigned pickups right now.</div>
               ) : (
-                <ul className="list" aria-live="polite">
+                <ul className="cd-list" aria-live="polite">
                   {available.map((p) => (
-                    <li key={p._id} className="list-item">
-                      <div style={{ maxWidth: 360 }}>
-                        <div style={{ fontWeight: 700 }}>{p.wasteType}</div>
-                        <div style={{ color: "#666", fontSize: 13 }}>{p.quantity} kg • {p.user?.name ?? "User"}</div>
+                    <li key={p._id} className="cd-item cd-item--v">
+                      <div className="cd-item__meta"
+                        onClick={() => navigate(`/collector/history/${p._id}`)}
+                        role="button" tabIndex={0}
+                        onKeyDown={(e) => e.key === "Enter" && navigate(`/collector/history/${p._id}`)}>
+                        <div className="cd-item__title">{p.wasteType}</div>
+                        <div className="cd-item__sub">{p.quantity} kg • {p.user?.name ?? "User"}</div>
+                        {p.createdAt && <div className="cd-item__time">{new Date(p.createdAt).toLocaleString()}</div>}
                       </div>
-
-                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                        <button
-                          className="btn primary"
-                          onClick={() => claimPickup(p._id)}
-                          disabled={!!assigningIds[p._id]}
-                        >
+                      <div className="cd-item__aside">
+                        <span className="cd-badge" style={badgeStyle(p.status)}>{p.status ?? "pending"}</span>
+                        <button className="cd-btn cd-btn--primary cd-btn--sm"
+                          onClick={() => claimPickup(p._id)} disabled={!!assigningIds[p._id]}>
                           {assigningIds[p._id] ? "Assigning…" : "Assign to me"}
                         </button>
-
-                        {/* Link changed: open history/detail for this pickup */}
-                        <Link to={`/collector/history/${p._id}`} className="view-link">View</Link>
+                        <Link to={`/collector/history/${p._id}`} className="cd-link"
+                          onClick={(e) => e.stopPropagation()}>View</Link>
                       </div>
                     </li>
                   ))}
@@ -553,26 +706,18 @@ export default function CollectorDashboard(): JSX.Element {
             </div>
           </div>
 
-          <aside className="col-right">
-            <div className="card right-card">
-              <h3 className="card-title">Earnings Snapshot</h3>
-              <div className="big">Rs 12,450</div>
-              <div style={{ color: "var(--muted)", marginTop: 8 }}>Payouts this month</div>
-              <div style={{ height: 12 }} />
-              <button className="btn primary" onClick={() => navigate("/collector/earnings")}>View full earnings</button>
-            </div>
-
-            <div style={{ height: 12 }} />
-
-            <div className="card">
-              <h3 className="card-title">Tips</h3>
-              <ul style={{ margin: 0, paddingLeft: 18 }}>
+          {/* ── Right column ── */}
+          <aside className="cd-col-right">
+            <div className="cd-card">
+              <h3 className="cd-card__title" style={{ marginBottom: 12 }}>Tips</h3>
+              <ul className="cd-tips">
                 <li>Communicate with users for timely pickups</li>
                 <li>Confirm weights on pickup for accurate payouts</li>
-                <li>Maintain safe handling & hygiene</li>
+                <li>Maintain safe handling &amp; hygiene</li>
               </ul>
             </div>
           </aside>
+
         </section>
       </main>
     </div>

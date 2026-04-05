@@ -1,331 +1,388 @@
-import React, { useEffect, useMemo, useState } from "react";
+// src/pages/RewardsCombined.tsx
+import React, { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import api from "../api";
-import { getErrorMessage } from "../utils/getErrorMessage";
 import Sidebar from "../components/Sidebar";
+import CollectorSidebar from "../components/CollectorSidebar";
+import { AuthContext } from "../App";
+import "./RewardsPage.css";
 
-/**
- * Compact Rewards page
- * - Less text, more icons
- * - Compact reward cards with inline SVG icons
- * - Preserves existing redeem logic and profile loading
- *
- * Save/replace: src/pages/RewardsPage.tsx
- */
+/* ── Types ── */
+type Profile         = { id?: string; name?: string; email?: string; points?: number; role?: string };
+type RewardItem      = { id: string; title: string; description?: string; cost: number };
+type Payment         = { id: string; date: string; amount: number; method?: string; note?: string };
+type EarningsResponse= { totalPickups?: number; totalPoints?: number; payments?: Payment[] };
+type Policy          = { collector: { pointsPerPickup: number; pointsPerKg: number | null }; user: { pointsPerPickup: number; pointsPerKg: number | null } };
 
-/* -------------------- Types -------------------- */
-type Profile = { id?: string; name?: string; email?: string; points?: number };
-type RewardItem = { id: string; title: string; description?: string; cost: number };
-
-/* -------------------- Data -------------------- */
-const TIERS = [
-  { name: "Bronze", min: 0, color: "#9e9e9e", icon: "🥉" },
-  { name: "Silver", min: 500, color: "#bdbdbd", icon: "🥈" },
-  { name: "Gold", min: 1000, color: "#ffd700", icon: "🥇" },
+/* ── Static catalogs ── */
+const USER_CATALOG: RewardItem[] = [
+  { id: "v100",     title: "Rs 100 Voucher", cost: 100, description: "Redeemable at partner stores" },
+  { id: "pickup",   title: "Free Pickup",    cost: 200, description: "One free scheduled pickup" },
+  { id: "discount", title: "5% Off",         cost: 50,  description: "Discount on next order" },
+];
+const COLLECTOR_REWARDS: RewardItem[] = [
+  { id: "meal",       title: "Free Meal",    cost: 100, description: "Meal voucher for collectors" },
+  { id: "helmet",     title: "Free Helmet",  cost: 500, description: "Safety helmet (admin-approved)" },
+  { id: "voucher100", title: "₹100 Voucher", cost: 120, description: "Gift voucher worth ₹100" },
 ];
 
-const CATALOG: RewardItem[] = [
-  { id: "v100", title: "Rs100 Voucher", cost: 100, description: "Shop voucher" },
-  { id: "pickup", title: "Free Pickup", cost: 200, description: "Coupon" },
-  { id: "discount", title: "5% Off", cost: 50, description: "Store discount" },
-];
+/* ── Component ── */
+export default function RewardsCombined(): React.ReactElement {
+  const auth = useContext(AuthContext);
 
-/* -------------------- Small inline icons -------------------- */
-const IconPoints = ({ size = 20 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-    <circle cx="12" cy="12" r="10" fill="#1db954" />
-    <path d="M8 12h8" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M12 8v8" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
+  const [loadingProfile,   setLoadingProfile]   = useState(true);
+  const [profile,          setProfile]          = useState<Profile | null>(null);
+  const [profileError,     setProfileError]     = useState<string | null>(null);
+  const [redeemingUserId,  setRedeemingUserId]  = useState<string | null>(null);
+  const [collectorData,    setCollectorData]    = useState<EarningsResponse | null>(null);
+  const [loadingCollector, setLoadingCollector] = useState(false);
+  const [collectorError,   setCollectorError]   = useState<string | null>(null);
+  const [redeemingCollector, setRedeemingCollector] = useState(false);
+  const [policy, setPolicy] = useState<Policy>({
+    collector: { pointsPerPickup: 10, pointsPerKg: null },
+    user:      { pointsPerPickup: 0,  pointsPerKg: null },
+  });
+  const [view, setView] = useState<"user" | "collector" | "both">("user");
 
-const IconVoucher = ({ size = 24 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-    <rect x="2" y="7" width="20" height="10" rx="2" fill="#fff" stroke="#0b6efd" strokeWidth="1.4" />
-    <circle cx="7.5" cy="12" r="1.6" fill="#0b6efd" />
-    <path d="M16 10v4" stroke="#0b6efd" strokeWidth="1.4" strokeLinecap="round" />
-  </svg>
-);
+  const roleNormalized = useMemo(() => {
+    const fromCtx     = (auth?.roleState ?? "").toString().trim().toLowerCase();
+    if (fromCtx)     return fromCtx;
+    const fromProfile = (profile?.role ?? "").toString().trim().toLowerCase();
+    if (fromProfile) return fromProfile;
+    return (localStorage.getItem("role") ?? "").toString().trim().toLowerCase();
+  }, [auth?.roleState, profile]);
 
-const IconPickup = ({ size = 24 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-    <path d="M3 10h12v6H3z" fill="#fff" stroke="#1db954" strokeWidth="1.4" />
-    <path d="M15 12l4-2 2 2v4" stroke="#1db954" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-    <circle cx="7" cy="18" r="1.4" fill="#1db954" />
-    <circle cx="17" cy="18" r="1.4" fill="#1db954" />
-  </svg>
-);
+  const allowedTabs = useMemo(() => {
+    if (!roleNormalized)                    return ["user","collector","both"];
+    if (roleNormalized === "collector")     return ["collector"];
+    if (roleNormalized === "user")          return ["user"];
+    return ["user","collector","both"];
+  }, [roleNormalized]);
 
-const IconDiscount = ({ size = 24 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-    <rect x="3" y="6" width="18" height="12" rx="2" fill="#fff" stroke="#ffd166" strokeWidth="1.4" />
-    <circle cx="8.5" cy="12" r="1.6" fill="#ffd166" />
-    <path d="M14 9.5l4 5" stroke="#ffd166" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-
-/* -------------------- Component -------------------- */
-const RewardsPage: React.FC = () => {
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const [redeemingId, setRedeemingId] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ msg: string; kind?: "ok" | "err" } | null>(null);
-
-  // load profile
-  const loadProfile = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await api.get<Profile>("/api/users/profile");
-      const body = (res && (res.data ?? (res.data as any)?.data)) || null;
-      setProfile(body);
-    } catch (err: any) {
-      console.error(err);
-      setError("Could not load profile");
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  /* load profile */
   useEffect(() => {
-    loadProfile();
+    let mounted = true;
+    (async () => {
+      setLoadingProfile(true); setProfileError(null);
+      try {
+        const res = await api.get<Profile>("/users/profile");
+        if (!mounted) return;
+        const p = res.data ?? null;
+        setProfile(p);
+        const r = (auth?.roleState ?? p?.role ?? localStorage.getItem("role") ?? "").toString().trim().toLowerCase();
+        setView(r === "collector" ? "collector" : r === "user" ? "user" : "both");
+      } catch (err: any) {
+        if (!mounted) return;
+        setProfileError(err?.response?.data?.message || err?.message || "Failed to load profile");
+        setProfile(null); setView("both");
+      } finally { if (mounted) setLoadingProfile(false); }
+    })();
+    return () => { mounted = false; };
+  }, [auth?.roleState]);
+
+  /* load policy */
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const r = await api.get("/rewards/catalog");
+        if (!mounted) return;
+        const p = r.data?.policy ?? {};
+        setPolicy({
+          collector: { pointsPerPickup: Number(p?.collector?.pointsPerPickup ?? 10), pointsPerKg: p?.collector?.pointsPerKg ?? null },
+          user:      { pointsPerPickup: Number(p?.user?.pointsPerPickup ?? 0),       pointsPerKg: p?.user?.pointsPerKg ?? null },
+        });
+      } catch {}
+    })();
+    return () => { mounted = false; };
   }, []);
 
-  const points = profile?.points ?? 0;
-
-  const currentTier = useMemo(() => TIERS.slice().reverse().find((t) => points >= t.min) ?? TIERS[0], [points]);
-  const nextTier = useMemo(() => TIERS.find((t) => t.min > (currentTier?.min ?? 0)) ?? null, [currentTier]);
-  const progressToNext = useMemo(() => {
-    if (!nextTier) return 100;
-    const prev = currentTier?.min ?? 0;
-    const range = nextTier.min - prev;
-    if (range <= 0) return 100;
-    return Math.max(0, Math.min(100, Math.round(((points - prev) / range) * 100)));
-  }, [points, currentTier, nextTier]);
-
-  const shortToast = (msg: string, kind: "ok" | "err" = "ok") => {
-    setToast({ msg, kind });
-    setTimeout(() => setToast(null), 2500);
-  };
-
-  const handleRedeem = async (item: RewardItem) => {
-    if (points < item.cost) {
-      shortToast(`Need ${item.cost} pts`, "err");
-      return;
-    }
-    if (!confirm(`Redeem ${item.cost} pts for ${item.title}?`)) return;
-
+  /* fetch collector earnings */
+  const fetchCollector = useCallback(async () => {
+    setLoadingCollector(true); setCollectorError(null);
     try {
-      setRedeemingId(item.id);
-      const res = await api.post("/api/rewards/redeem", { rewardId: item.id });
-      const body = res?.data ?? (res?.data as any)?.data;
-      if (body?.profile) {
-        setProfile(body.profile);
-        try { localStorage.setItem("user", JSON.stringify(body.profile)); } catch {}
-      } else {
-        await loadProfile();
-      }
-      shortToast("Redeemed", "ok");
+      const res = await api.get<EarningsResponse>("/waste/collector/earnings");
+      setCollectorData(res.data ?? null);
     } catch (err: any) {
-      console.error(err);
-      shortToast(getErrorMessage(err) || "Redeem failed", "err");
-    } finally {
-      setRedeemingId(null);
-    }
-  };
+      if (!err?.response)                    setCollectorError("Network error — could not reach API.");
+      else if (err.response.status === 401)  setCollectorError("Unauthorized — please login");
+      else if (err.response.status === 403)  setCollectorError("Not a collector");
+      else setCollectorError(err.response?.data?.message || err.message || "Failed to load collector earnings");
+      setCollectorData(null);
+    } finally { setLoadingCollector(false); }
+  }, []);
 
-  /* --- compact UI while loading --- */
-  if (loading) {
-    return (
-      <div style={s.page}>
-        <Sidebar active="rewards" />
-        <main style={s.main}>
-          <div style={s.header}>
-            <div style={s.hLeft}><h2 style={{ margin: 0 }}>Rewards</h2><div style={s.sub}>Points & perks</div></div>
-            <div style={s.pointsBox}><IconPoints /><div style={{ marginLeft: 8 }}>…</div></div>
-          </div>
+  useEffect(() => {
+    if ((view === "collector" || view === "both") && roleNormalized === "collector") fetchCollector();
+  }, [view, roleNormalized, fetchCollector]);
 
-          <div style={{ display: "grid", gap: 12, marginTop: 20 }}>
-            <div style={s.cardSkeleton} />
-            <div style={s.cardSkeleton} />
-            <div style={s.cardSkeleton} />
-          </div>
-        </main>
-      </div>
-    );
+  /* derived */
+  const userPoints               = profile?.points ?? 0;
+  const collectorPayments        = collectorData?.payments ?? [];
+  const collectorTotalPickups    = collectorData?.totalPickups ?? 0;
+  const collectorServerPoints    = collectorData?.totalPoints;
+  const collectorFromPayments    = collectorPayments.reduce((s, p) => s + (p.amount ?? 0), 0);
+  const ptsPer                   = Number(policy.collector.pointsPerPickup || 10);
+  const collectorFromPickups     = collectorTotalPickups * ptsPer;
+  const collectorPointsAvailable = collectorServerPoints ?? (collectorFromPayments > 0 ? collectorFromPayments : collectorFromPickups);
+
+  function pickupsNeeded(rewardCost: number, current: number) {
+    if (!ptsPer || ptsPer <= 0) return Infinity;
+    return Math.ceil(Math.max(0, rewardCost - current) / ptsPer);
   }
 
+  /* handlers */
+  const handleUserRedeem = async (item: RewardItem) => {
+    if (userPoints < item.cost) { alert("Not enough points"); return; }
+    if (!confirm(`Redeem ${item.cost} pts for "${item.title}"?`)) return;
+    setRedeemingUserId(item.id);
+    try {
+      const res = await api.post("/rewards/redeem", { rewardId: item.id });
+      const body = res?.data;
+      if (body?.profile) setProfile(body.profile);
+      else { const r2 = await api.get<Profile>("/users/profile"); setProfile(r2.data ?? null); }
+      alert("Redeemed successfully.");
+    } catch (err: any) { alert(err?.response?.data?.message || "Redeem failed"); }
+    finally { setRedeemingUserId(null); }
+  };
+
+  const handleCollectorRedeem = async (reward: RewardItem) => {
+    if (collectorPointsAvailable < reward.cost) { alert("Not enough collector points"); return; }
+    if (!confirm(`Redeem ${reward.cost} pts for "${reward.title}"?`)) return;
+    setRedeemingCollector(true);
+    try {
+      await api.post("/waste/collector/redeem", { rewardId: reward.id, cost: reward.cost });
+      await fetchCollector();
+      alert("Collector redemption submitted.");
+    } catch (err: any) { alert(err?.response?.data?.message || "Collector redeem failed"); }
+    finally { setRedeemingCollector(false); }
+  };
+
+  const fmtPoints = (v: number) => `${v.toLocaleString()} pts`;
+  const fmtDate   = (iso?: string) => iso ? new Date(iso).toLocaleDateString() : "—";
+
+  const LeftSidebar = useMemo(() => (roleNormalized === "collector" ? <CollectorSidebar /> : <Sidebar />), [roleNormalized]);
+
+  /* ── Tabs ── */
+  const renderTabs = () => {
+    if (allowedTabs.length === 1) {
+      const label = allowedTabs[0] === "collector" ? "Collector" : allowedTabs[0] === "user" ? "User" : "Both";
+      return <div className="rc-tab-label">{label}</div>;
+    }
+    return (
+      <div className="rc-tabs" role="tablist" aria-label="Reward views">
+        {allowedTabs.includes("user") && (
+          <button type="button" role="tab" aria-selected={view === "user"}
+            className={`rc-tab${view === "user" ? " rc-tab--active" : ""}`}
+            onClick={() => setView("user")}>
+            User rewards
+          </button>
+        )}
+        {allowedTabs.includes("collector") && (
+          <button type="button" role="tab" aria-selected={view === "collector"}
+            className={`rc-tab${view === "collector" ? " rc-tab--active" : ""}`}
+            onClick={() => setView("collector")}>
+            Collector points
+          </button>
+        )}
+        {allowedTabs.includes("both") && (
+          <button type="button" role="tab" aria-selected={view === "both"}
+            className={`rc-tab${view === "both" ? " rc-tab--active" : ""}`}
+            onClick={() => setView("both")}>
+            Both
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  const refreshProfile = async () => {
+    setLoadingProfile(true); setProfileError(null);
+    try { const r = await api.get<Profile>("/users/profile"); setProfile(r.data ?? null); }
+    catch (e: any) { setProfileError(e?.message || "Failed"); }
+    finally { setLoadingProfile(false); }
+  };
+
+  /* ── Render ── */
   return (
-    <div style={s.page}>
-      <Sidebar active="rewards" />
-      <main style={s.main}>
-        <div style={s.header}>
-          <div style={s.hLeft}>
-            <h2 style={{ margin: 0 }}>Rewards</h2>
-            <div style={s.sub}>Points & perks</div>
-          </div>
+    <div className="ct-layout">
+      <div className="ct-aside">{LeftSidebar}</div>
 
-          <div style={s.pointsBox} aria-live="polite">
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <IconPoints size={22} />
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 12, opacity: 0.9 }}>My points</div>
-                <div style={{ fontSize: 22, fontWeight: 800 }}>{points}</div>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div className="ct-page">
 
-        {/* Tier summary - compact */}
-        <section style={s.rowCompact}>
-          <div style={s.tierCard}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ fontSize: 26 }}>{currentTier.icon}</div>
+        {/* ── Tabs ── */}
+        {renderTabs()}
+
+        {/* ══════════════ USER REWARDS ══════════════ */}
+        {(view === "user" || view === "both") && allowedTabs.includes("user") && (
+          <section aria-labelledby="rc-user-title">
+
+            <div className="rc-header">
               <div>
-                <div style={{ fontWeight: 800 }}>{currentTier.name}</div>
-                <div style={{ fontSize: 12, color: "#666" }}>{currentTier.min} pts</div>
+                <h2 id="rc-user-title" className="rc-title">User Rewards</h2>
+                <p className="rc-sub">Redeem offers using your accumulated points</p>
               </div>
+              <button type="button" className="rc-btn rc-btn--ghost" onClick={refreshProfile}>
+                {loadingProfile ? "Refreshing…" : "↻ Refresh"}
+              </button>
             </div>
 
-            <div style={s.progressWrap}>
-              <div style={s.progressBar}>
-                <div style={{ ...s.progressFill, width: `${progressToNext}%`, background: currentTier.color }} />
-              </div>
-              <div style={{ fontSize: 12, color: "#444", marginTop: 6 }}>
-                {nextTier ? `${progressToNext}% → ${nextTier.name}` : "Max tier"}
-              </div>
+            {/* Profile strip */}
+            <div className="rc-profile" role="region" aria-label="User profile">
+              {loadingProfile ? (
+                <div className="rc-loading">Loading profile…</div>
+              ) : profileError ? (
+                <div className="rc-error">⚠ {profileError}</div>
+              ) : profile ? (
+                <>
+                  <div>
+                    <div className="rc-profile__name">{profile.name ?? "—"}</div>
+                    <div className="rc-profile__email">{profile.email ?? ""}</div>
+                  </div>
+                  <div className="rc-profile__balance">
+                    <div className="rc-points-badge">{fmtPoints(userPoints)}</div>
+                    <div className="rc-points-label">Balance</div>
+                  </div>
+                </>
+              ) : (
+                <div className="muted">No profile data</div>
+              )}
             </div>
-          </div>
 
-          <div style={s.quickHelp}>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>Quick ways to earn</div>
-            <div style={s.inlineList}>
-              <div style={s.helpChip}>⚖️ +10 / kg</div>
-              <div style={s.helpChip}>📅 Weekly +20</div>
-              <div style={s.helpChip}>🎁 Referrals</div>
-            </div>
-          </div>
-        </section>
-
-        {/* Catalog - compact cards with icons */}
-        <section style={{ marginTop: 18 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <h3 style={{ margin: 0 }}>Redeem</h3>
-            <div style={{ fontSize: 13, color: "#666" }}>{CATALOG.length} offers</div>
-          </div>
-
-          <div style={s.catalogGrid}>
-            {CATALOG.map((item) => {
-              const can = points >= item.cost;
-              const processing = redeemingId === item.id;
-              return (
-                <div key={item.id} style={{ ...s.rewardCard, opacity: can || processing ? 1 : 0.6 }}>
-                  <div style={s.rewardLeft}>
-                    <div style={s.iconWrap}>
-                      {item.id === "v100" ? <IconVoucher /> : item.id === "pickup" ? <IconPickup /> : <IconDiscount />}
+            {/* Reward list */}
+            <div className="reward-list" aria-label="User reward catalog">
+              {USER_CATALOG.map((item) => {
+                const can = userPoints >= item.cost;
+                return (
+                  <div key={item.id} className="reward-item">
+                    <div className="reward-left">
+                      <div className="reward-title">{item.title}</div>
+                      <div className="reward-desc">{item.description}</div>
                     </div>
-                    <div>
-                      <div style={{ fontWeight: 800 }}>{item.title}</div>
-                      <div style={{ fontSize: 12, color: "#666" }}>{item.description}</div>
+                    <div className="reward-right">
+                      <span className="reward-cost">{item.cost} pts</span>
+                      <button
+                        className={`rc-btn${!can ? " rc-btn--locked" : ""}`}
+                        disabled={!can || !!redeemingUserId}
+                        onClick={() => handleUserRedeem(item)}
+                      >
+                        {redeemingUserId === item.id ? "Redeeming…" : can ? "Redeem" : "Need pts"}
+                      </button>
                     </div>
                   </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontWeight: 800 }}>{item.cost} pts</div>
-                    <button
-                      style={{ ...s.smallButton, marginTop: 8, opacity: can && !processing ? 1 : 0.7, cursor: can && !processing ? "pointer" : "not-allowed" }}
-                      disabled={!can || !!processing}
-                      onClick={() => handleRedeem(item)}
-                    >
-                      {processing ? "…" : can ? "Redeem" : "Need pts"}
-                    </button>
+        {/* Divider between sections in "both" mode */}
+        {view === "both" && allowedTabs.includes("user") && allowedTabs.includes("collector") && (
+          <div className="rc-divider" />
+        )}
+
+        {/* ══════════════ COLLECTOR POINTS ══════════════ */}
+        {(view === "collector" || view === "both") && allowedTabs.includes("collector") && (
+          <section aria-labelledby="rc-collector-title">
+
+            <div className="rc-header">
+              <div>
+                <h2 id="rc-collector-title" className="rc-title">Collector Points</h2>
+                <p className="rc-sub">Ledger and redemptions for collectors</p>
+              </div>
+              <button type="button" className="rc-btn rc-btn--ghost" onClick={fetchCollector} disabled={loadingCollector}>
+                {loadingCollector ? "Refreshing…" : "↻ Refresh"}
+              </button>
+            </div>
+
+            {/* Collector profile strip */}
+            <div className="rc-profile" role="region" aria-label="Collector balance">
+              {loadingCollector ? (
+                <div className="rc-loading">Loading collector data…</div>
+              ) : collectorError ? (
+                <div className="rc-error">⚠ {collectorError}</div>
+              ) : (
+                <>
+                  <div>
+                    <div className="rc-profile__name">Points balance</div>
+                    <div className="rc-profile__email">{collectorTotalPickups} pickups recorded</div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* Activity + hints compact */}
-        <section style={{ display: "flex", gap: 12, marginTop: 18, alignItems: "flex-start" }}>
-          <div style={{ ...s.card, flex: 1 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontWeight: 800 }}>Recent</div>
-              <div style={{ fontSize: 12, color: "#666" }}>{profile?.name ?? "Guest"}</div>
+                  <div className="rc-profile__balance">
+                    <div className="rc-points-badge">{fmtPoints(collectorPointsAvailable)}</div>
+                    <div className="rc-points-label">
+                      {collectorServerPoints !== undefined
+                        ? "Server balance"
+                        : collectorFromPayments > 0
+                        ? "Ledger total"
+                        : `Est. from ${collectorTotalPickups} pickups`}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
-            <div style={{ marginTop: 8, color: "#666", fontSize: 13 }}>
-              <div>Points: <strong>{points}</strong></div>
-              <div style={{ marginTop: 6 }}>Check rewards & redeem quickly.</div>
-            </div>
-          </div>
 
-          <div style={{ width: 320 }}>
-            <div style={s.card}>
-              <div style={{ fontWeight: 800 }}>Tips</div>
-              <ul style={{ marginTop: 8, paddingLeft: 18 }}>
-                <li style={{ fontSize: 13, color: "#555" }}>Rinse items</li>
-                <li style={{ fontSize: 13, color: "#555" }}>Bundle cardboard</li>
-              </ul>
-            </div>
-          </div>
-        </section>
-      </main>
+            {/* Ledger table */}
+            {collectorPayments.length === 0 ? (
+              <div className="rc-ledger-wrap">
+                <div className="rc-empty-ledger">No ledger entries yet.</div>
+              </div>
+            ) : (
+              <div className="rc-ledger-wrap">
+                <table className="rc-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Points</th>
+                      <th>Method</th>
+                      <th>Note</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {collectorPayments.map((p) => (
+                      <tr key={p.id}>
+                        <td>{fmtDate(p.date)}</td>
+                        <td>{p.amount} pts</td>
+                        <td>{p.method ?? "—"}</td>
+                        <td>{p.note ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
-      {/* compact toast */}
-      {toast && (
-        <div style={{ ...s.toast, ...(toast.kind === "err" ? s.toastErr : s.toastOk) }}>
-          {toast.msg}
-        </div>
-      )}
+            {/* Collector reward catalog */}
+            <div className="reward-list" aria-label="Collector reward catalog">
+              {COLLECTOR_REWARDS.map((r) => {
+                const affordable  = collectorPointsAvailable >= r.cost;
+                const picksNeeded = pickupsNeeded(r.cost, collectorPointsAvailable);
+                return (
+                  <div key={r.id} className="reward-item">
+                    <div className="reward-left">
+                      <div className="reward-title">{r.title}</div>
+                      <div className="reward-desc">{r.description}</div>
+                    </div>
+                    <div className="reward-right">
+                      <span className="reward-cost">{r.cost} pts</span>
+                      {!affordable && Number.isFinite(picksNeeded) && (
+                        <div className="reward-needed">
+                          {picksNeeded} more pickup{picksNeeded !== 1 ? "s" : ""} needed
+                        </div>
+                      )}
+                      <button
+                        className={`rc-btn${!affordable ? " rc-btn--locked" : ""}`}
+                        onClick={() => handleCollectorRedeem(r)}
+                        disabled={!affordable || redeemingCollector}
+                      >
+                        {redeemingCollector ? "Processing…" : affordable ? "Redeem" : "Not enough"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+      </div>
     </div>
   );
-};
-
-export default RewardsPage;
-
-/* -------------------- Styles (compact object) -------------------- */
-const s: { [k: string]: React.CSSProperties } = {
-  page: { display: "flex", minHeight: "100vh", background: "#f5f7fb" },
-  main: { flex: 1, padding: 20, maxWidth: 1100, margin: "0 auto" },
-  header: { display: "flex", alignItems: "center", gap: 12, marginBottom: 16 },
-  hLeft: { display: "flex", flexDirection: "column" },
-  sub: { color: "#666", fontSize: 13 },
-
-  pointsBox: {
-    marginLeft: "auto",
-    background: "#14392b",
-    color: "#fff",
-    padding: "8px 12px",
-    borderRadius: 10,
-    minWidth: 110,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  rowCompact: { display: "flex", gap: 12, alignItems: "stretch" },
-  tierCard: { flex: 1, background: "#fff", padding: 12, borderRadius: 10, boxShadow: "0 4px 18px rgba(0,0,0,0.05)" },
-  quickHelp: { width: 260, background: "#fff", padding: 12, borderRadius: 10, boxShadow: "0 4px 18px rgba(0,0,0,0.04)" },
-
-  progressWrap: { marginTop: 12 },
-  progressBar: { height: 10, background: "#f0f0f0", borderRadius: 8, overflow: "hidden" },
-  progressFill: { height: "100%", transition: "width 320ms ease" },
-
-  inlineList: { display: "flex", gap: 8, flexWrap: "wrap" },
-  helpChip: { background: "#f3fff3", padding: "6px 8px", borderRadius: 999, fontSize: 13, color: "#1b6b35" },
-
-  catalogGrid: { display: "grid", gap: 12 },
-  rewardCard: { display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fff", padding: 12, borderRadius: 10, boxShadow: "0 4px 16px rgba(0,0,0,0.04)" },
-  rewardLeft: { display: "flex", gap: 10, alignItems: "center" },
-  iconWrap: { width: 44, height: 44, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: "#f7fff7" },
-
-  smallButton: { background: "#14392b", color: "#fff", padding: "6px 10px", borderRadius: 8, border: "none", cursor: "pointer", fontWeight: 700 },
-
-  card: { background: "#fff", padding: 12, borderRadius: 10, boxShadow: "0 4px 16px rgba(0,0,0,0.04)" },
-
-  cardSkeleton: { height: 54, background: "linear-gradient(90deg,#f3f7f3 0,#eef9ee 50%, #f3f7f3 100%)", borderRadius: 8 },
-
-  toast: { position: "fixed", right: 16, bottom: 16, padding: "8px 12px", borderRadius: 8, color: "#fff", zIndex: 9999 },
-  toastOk: { background: "#27ae60" },
-  toastErr: { background: "#e74c3c" },
-};
+}
