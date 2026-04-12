@@ -1,5 +1,4 @@
-// src/pages/admin/PricingManagement.tsx
-import React, { useEffect, useMemo, useState, type JSX } from "react";
+import  { useEffect, useMemo, useState, type JSX } from "react";
 import api from "../../api";
 import type { AxiosResponse } from "axios";
 import AdminSidebar from "../../components/AdminSidebar";

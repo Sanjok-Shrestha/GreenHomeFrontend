@@ -1,4 +1,3 @@
-// src/pages/CollectorHistory.tsx
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
@@ -194,7 +193,7 @@ const css = `
     min-width: 0;
   }
 
-  /* ── Waste icon ── */
+  /* ── Waste image / icon ── */
   .ch-icon {
     width: 44px;
     height: 44px;
@@ -206,6 +205,14 @@ const css = `
     justify-content: center;
     font-size: 20px;
     flex-shrink: 0;
+    overflow: hidden;
+  }
+
+  .ch-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
   }
 
   .ch-card__meta { flex: 1; min-width: 0; }
@@ -367,38 +374,86 @@ const css = `
 /* ─────────────────────────── Helpers ─────────────────────────── */
 function badgeStyle(status?: string): React.CSSProperties {
   const s = (status ?? "").toLowerCase();
-  if (s === "collected"  || s === "completed") return { background: "#dcfce7", color: "#15803d" };
-  if (s === "pending")                         return { background: "#fef9c3", color: "#854d0e" };
-  if (s === "scheduled"  || s === "assigned")  return { background: "#dbeafe", color: "#1d4ed8" };
-  if (s === "cancelled"  || s === "failed")    return { background: "#fee2e2", color: "#b91c1c" };
+  if (s === "collected" || s === "completed") return { background: "#dcfce7", color: "#15803d" };
+  if (s === "pending") return { background: "#fef9c3", color: "#854d0e" };
+  if (s === "scheduled" || s === "assigned") return { background: "#dbeafe", color: "#1d4ed8" };
+  if (s === "cancelled" || s === "failed") return { background: "#fee2e2", color: "#b91c1c" };
   return { background: "#f1f5f9", color: "#475569" };
 }
 
 function wasteEmoji(type?: string): string {
   const t = (type ?? "").toLowerCase();
-  if (t.includes("plastic"))   return "♻️";
-  if (t.includes("paper"))     return "📄";
-  if (t.includes("metal"))     return "🔩";
-  if (t.includes("glass"))     return "🫙";
+  if (t.includes("plastic")) return "♻️";
+  if (t.includes("paper")) return "📄";
+  if (t.includes("metal")) return "🔩";
+  if (t.includes("glass")) return "🫙";
   if (t.includes("organic") || t.includes("food")) return "🌿";
-  if (t.includes("e-waste")  || t.includes("electronic")) return "💻";
+  if (t.includes("e-waste") || t.includes("electronic")) return "💻";
   return "🗑️";
+}
+
+/* Resolve media URLs — prefer api.defaults.baseURL when provided */
+function resolveUrl(src?: string | null): string | null {
+  if (!src) return null;
+  const s = String(src).trim();
+  if (!s) return null;
+  if (/^https?:\/\//i.test(s)) return s;
+  if (/^\/\//.test(s)) return window.location.protocol + s;
+  const base = (api.defaults && (api.defaults.baseURL as string)) || "";
+  if (base) {
+    try {
+      const b = base.endsWith("/") ? base.slice(0, -1) : base;
+      if (s.startsWith("/")) return `${b}${s}`;
+      return `${b}/${s}`;
+    } catch {
+      // fallback
+    }
+  }
+  if (s.startsWith("/")) return window.location.origin + s;
+  return window.location.origin + "/" + s;
 }
 
 /* ─────────────────────────── Types ─────────────────────────── */
 type Pickup = {
-  _id: string; wasteType?: string; quantity?: number; status?: string;
-  createdAt?: string; location?: string;
+  _id: string;
+  wasteType?: string;
+  quantity?: number;
+  status?: string;
+  createdAt?: string;
+  location?: string;
   user?: { name?: string; phone?: string; address?: string };
+  image?: string | null;
+  imageUrl?: string | null;
+  [k: string]: any;
 };
+
+/* ─────────────────────────── Thumbnail component ─────────────────────────── */
+function Thumbnail({ src, alt, emojiFallback }: { src?: string | null; alt?: string; emojiFallback?: string }) {
+  const [failed, setFailed] = useState(false);
+  const resolved = resolveUrl(src ?? "") ?? src ?? "";
+
+  if (!resolved || failed) {
+    return <div className="ch-icon" aria-hidden>{emojiFallback ?? "🗑️"}</div>;
+  }
+
+  return (
+    <div className="ch-icon" aria-hidden>
+      <img
+        src={resolved}
+        alt={alt ?? "image"}
+        onError={() => setFailed(true)}
+      />
+    </div>
+  );
+}
 
 /* ─────────────────────────── Component ─────────────────────────── */
 export default function CollectorHistory(): React.ReactElement {
-  const [items,       setItems]       = useState<Pickup[]>([]);
-  const [loading,     setLoading]     = useState(true);
-  const [error,       setError]       = useState<string | null>(null);
-  const [statusCode,  setStatusCode]  = useState<number | null>(null);
-  const [rawError,    setRawError]    = useState<any>(null);
+  const [items, setItems] = useState<Pickup[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [statusCode, setStatusCode] = useState<number | null>(null);
+  const [rawError, setRawError] = useState<any>(null);
   const [showDetails, setShowDetails] = useState(false);
   const navigate = useNavigate();
 
@@ -406,9 +461,22 @@ export default function CollectorHistory(): React.ReactElement {
     setLoading(true); setError(null); setStatusCode(null); setRawError(null);
     try {
       // NOTE: use relative path here — api instance should include baseURL '/api'
-      const res  = await api.get("/collector/history");
+      const res = await api.get("/collector/history");
       const data = Array.isArray(res.data) ? res.data : res.data?.data ?? [];
-      setItems(data);
+      // normalize items to ensure image fields present if backend uses different keys
+      const normalized: Pickup[] = data.map((d: any) => ({
+        _id: d._id ?? d.id ?? String(Math.random()).slice(2),
+        wasteType: d.wasteType ?? d.type ?? d.category,
+        quantity: d.quantity ?? d.qty ?? 0,
+        status: d.status ?? "pending",
+        createdAt: d.createdAt ?? d.created_at,
+        location: d.location ?? d.address ?? d.place,
+        user: d.user ?? d.requester,
+        image: d.image ?? d.imageUrl ?? d.photo ?? null,
+        imageUrl: d.imageUrl ?? d.image ?? d.photo ?? null,
+        ...d,
+      }));
+      setItems(normalized);
     } catch (err: any) {
       if (!err?.response) {
         setError("Unable to reach server. Is the backend running?");
@@ -418,7 +486,7 @@ export default function CollectorHistory(): React.ReactElement {
         setStatusCode(code);
         if (code === 401) {
           setError("Not authenticated. Please login again.");
-          try { ["token","accessToken","user","role"].forEach((k) => localStorage.removeItem(k)); } catch {}
+          try { ["token", "accessToken", "user", "role"].forEach((k) => localStorage.removeItem(k)); } catch {}
           setTimeout(() => navigate("/login"), 900);
         } else if (code === 403) {
           setError("Forbidden. Your account does not have permission to view this history.");
@@ -530,7 +598,9 @@ export default function CollectorHistory(): React.ReactElement {
 
                     <div className="ch-card__top">
                       <div className="ch-card__left">
-                        <div className="ch-icon">{wasteEmoji(p.wasteType)}</div>
+                        {/* Thumbnail: prefer imageUrl/image, fallback to emoji */}
+                        <Thumbnail src={p.imageUrl ?? p.image ?? null} alt={p.wasteType} emojiFallback={wasteEmoji(p.wasteType)} />
+
                         <div className="ch-card__meta">
                           <div className="ch-card__type">{p.wasteType ?? "Unknown"}</div>
                           <div className="ch-card__info">

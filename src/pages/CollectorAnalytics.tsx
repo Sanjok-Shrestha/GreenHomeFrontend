@@ -1,5 +1,4 @@
-// src/pages/CollectorAnalytics.tsx
-import React, { useCallback, useEffect, useMemo, useRef, useState, type JSX } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from "react";
 import api from "../api";
 import { useNavigate } from "react-router-dom";
 import CollectorSidebar from "../components/CollectorSidebar";

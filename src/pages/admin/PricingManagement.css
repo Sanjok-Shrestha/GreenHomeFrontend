@@ -50,20 +50,25 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 button { cursor: pointer; font-family: var(--font); }
+a { color: inherit; text-decoration: none; }
 
 /* ============================================================
    PAGE SHELL
    ============================================================ */
+
+/* Full‑width content (no centering, no side padding) */
 .pm-page {
-  max-width: 1020px;
-  margin: 24px auto;
-  padding: 0 20px 64px;
+  width: 100%;
+  margin: 0;
+  padding: 8px 0 56px;  /* small top, no left/right, bottom 56px */
   font-family: var(--font);
   color: var(--text-primary);
 }
 
 /* ── Header ── */
-.pm-header { margin-bottom: 20px; }
+.pm-header {
+  margin-bottom: 16px;
+}
 
 .pm-title {
   font-size: 20px;
@@ -83,6 +88,7 @@ button { cursor: pointer; font-family: var(--font); }
 /* ============================================================
    TOOLBAR
    ============================================================ */
+
 .pm-toolbar {
   display: flex;
   align-items: center;
@@ -108,7 +114,10 @@ button { cursor: pointer; font-family: var(--font); }
   color: var(--text-primary);
   background: var(--bg-surface);
   outline: none;
-  transition: border-color var(--t), box-shadow var(--t), background var(--t);
+  transition:
+    border-color var(--t),
+    box-shadow var(--t),
+    background var(--t);
 }
 .pm-search::placeholder { color: var(--text-muted); }
 .pm-search:focus {
@@ -130,11 +139,22 @@ button { cursor: pointer; font-family: var(--font); }
   border-radius: var(--r-sm);
   border: 1px solid var(--border-strong);
   background: var(--bg-surface);
-  transition: background var(--t), border-color var(--t), color var(--t);
+  transition:
+    background var(--t),
+    border-color var(--t),
+    color var(--t);
   white-space: nowrap;
 }
-.pm-toggle:hover { background: var(--green-light); border-color: var(--green-mid); color: var(--green-dark); }
-.pm-toggle input[type="checkbox"] { accent-color: var(--green); width: 14px; height: 14px; }
+.pm-toggle:hover {
+  background: var(--green-light);
+  border-color: var(--green-mid);
+  color: var(--green-dark);
+}
+.pm-toggle input[type="checkbox"] {
+  accent-color: var(--green);
+  width: 14px;
+  height: 14px;
+}
 
 .pm-count {
   font-size: 12px;
@@ -147,11 +167,17 @@ button { cursor: pointer; font-family: var(--font); }
   white-space: nowrap;
 }
 
-.pm-toolbar__right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.pm-toolbar__right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 
 /* ============================================================
    STATES
    ============================================================ */
+
 @keyframes pm-spin { to { transform: rotate(360deg); } }
 
 .pm-loading {
@@ -164,7 +190,8 @@ button { cursor: pointer; font-family: var(--font); }
 }
 .pm-loading::before {
   content: "";
-  width: 16px; height: 16px;
+  width: 16px;
+  height: 16px;
   border: 2px solid var(--border-strong);
   border-top-color: var(--green);
   border-radius: 50%;
@@ -187,6 +214,7 @@ button { cursor: pointer; font-family: var(--font); }
 /* ============================================================
    TABLE CARD
    ============================================================ */
+
 .pm-table-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -227,7 +255,10 @@ button { cursor: pointer; font-family: var(--font); }
 .pm-table tbody tr:last-child { border-bottom: none; }
 .pm-table tbody tr:hover { background: #fafaf7; }
 .pm-table tbody tr.pm-row--editing { background: var(--green-light); }
-.pm-table tbody tr.pm-row--busy    { opacity: 0.5; pointer-events: none; }
+.pm-table tbody tr.pm-row--busy {
+  opacity: 0.5;
+  pointer-events: none;
+}
 
 .pm-table td {
   padding: 11px 16px;
@@ -300,7 +331,9 @@ button { cursor: pointer; font-family: var(--font); }
   background: var(--bg-card);
   outline: none;
   font-variant-numeric: tabular-nums;
-  transition: border-color var(--t), box-shadow var(--t);
+  transition:
+    border-color var(--t),
+    box-shadow var(--t);
 }
 .pm-edit-input:focus {
   border-color: var(--green-mid);
@@ -308,7 +341,11 @@ button { cursor: pointer; font-family: var(--font); }
 }
 
 /* Actions cell */
-.pm-actions { display: flex; align-items: center; gap: 6px; }
+.pm-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 
 /* Empty row */
 .pm-empty td {
@@ -321,6 +358,7 @@ button { cursor: pointer; font-family: var(--font); }
 /* ============================================================
    BUTTONS
    ============================================================ */
+
 .pm-btn {
   display: inline-flex;
   align-items: center;
@@ -336,11 +374,24 @@ button { cursor: pointer; font-family: var(--font); }
   background: var(--bg-card);
   color: var(--text-secondary);
   white-space: nowrap;
-  transition: background var(--t), color var(--t), border-color var(--t), transform 0.1s, opacity var(--t);
+  transition:
+    background var(--t),
+    color var(--t),
+    border-color var(--t),
+    transform 0.1s,
+    opacity var(--t);
 }
-.pm-btn:hover:not(:disabled) { background: var(--bg-inset); color: var(--text-primary); }
-.pm-btn:active:not(:disabled) { transform: scale(0.96); }
-.pm-btn:disabled { opacity: 0.44; cursor: not-allowed; }
+.pm-btn:hover:not(:disabled) {
+  background: var(--bg-inset);
+  color: var(--text-primary);
+}
+.pm-btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+.pm-btn:disabled {
+  opacity: 0.44;
+  cursor: not-allowed;
+}
 
 .pm-btn--save {
   background: var(--green);
@@ -399,6 +450,7 @@ button { cursor: pointer; font-family: var(--font); }
 /* ============================================================
    ADD NEW ROW
    ============================================================ */
+
 .pm-add-card {
   margin-top: 16px;
   background: var(--bg-card);
@@ -432,7 +484,10 @@ button { cursor: pointer; font-family: var(--font); }
   color: var(--text-primary);
   background: var(--bg-surface);
   outline: none;
-  transition: border-color var(--t), box-shadow var(--t), background var(--t);
+  transition:
+    border-color var(--t),
+    box-shadow var(--t),
+    background var(--t);
 }
 .pm-add-input::placeholder { color: var(--text-muted); }
 .pm-add-input:focus {
@@ -453,12 +508,28 @@ button { cursor: pointer; font-family: var(--font); }
 /* ============================================================
    RESPONSIVE
    ============================================================ */
+
 @media (max-width: 640px) {
-  .pm-page    { padding: 12px 10px 48px; }
-  .pm-title   { font-size: 17px; }
-  .pm-toolbar { gap: 8px; }
-  .pm-toolbar__right { margin-left: 0; }
-  .pm-add-input--type  { width: 100%; }
-  .pm-add-input--price { width: 130px; }
-  .pm-table th, .pm-table td { padding: 9px 10px; }
+  .pm-page {
+    padding: 8px 0 40px;
+  }
+  .pm-title {
+    font-size: 17px;
+  }
+  .pm-toolbar {
+    gap: 8px;
+  }
+  .pm-toolbar__right {
+    margin-left: 0;
+  }
+  .pm-add-input--type {
+    width: 100%;
+  }
+  .pm-add-input--price {
+    width: 130px;
+  }
+  .pm-table th,
+  .pm-table td {
+    padding: 9px 10px;
+  }
 }

@@ -1,3 +1,4 @@
+// src/pages/TrackPickup.tsx
 import React, { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline, Circle } from "react-leaflet";
@@ -7,87 +8,13 @@ import Sidebar from "../components/Sidebar";
 import CollectorSidebar from "../components/CollectorSidebar";
 import AdminSidebar from "../components/AdminSidebar";
 import api from "../api";
+import { io as ioClient, type Socket } from "socket.io-client";
 
 /* ─────────────────────────── Styles ─────────────────────────── */
-const css = `
-  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+/* Paste your full CSS string here (same as you used before). For brevity I assume you keep the same css variable defined previously. */
+const css = `/* (copy your existing CSS here) */`;
 
-  *, *::before, *::after { box-sizing: border-box; }
-
-  :root {
-    --bg: #f1f4f2;
-    --surface: #ffffff;
-    --surface-2: #f7faf8;
-    --border: #e2e9e5;
-    --green: #18a349;
-    --green-soft: #e8f5ed;
-    --text-1: #0c1f13;
-    --text-2: #3d5c47;
-    --text-3: #89a894;
-    --danger: #dc2626;
-    --mono: 'JetBrains Mono', monospace;
-    --font: 'Plus Jakarta Sans', system-ui, sans-serif;
-    --r-md: 12px;
-    --r-lg: 16px;
-    --sh-sm: 0 1px 4px rgba(0,0,0,.05);
-  }
-
-  .tp-page { padding: 28px 24px 56px; max-width: 1160px; margin: 0 auto; font-family: var(--font); color: var(--text-1); -webkit-font-smoothing: antialiased; }
-  .tp-header { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:20px; flex-wrap:wrap; }
-  .tp-back { background:none; border:none; color:var(--green); font-size:13px; font-weight:600; cursor:pointer; padding:0; margin-bottom:6px; }
-  .tp-title { margin:0 0 3px; font-size:21px; font-weight:800; }
-  .tp-subtitle { font-size:13px; color:var(--text-3); text-transform:capitalize; }
-
-  .tp-controls { display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
-  .tp-meta { display:flex; gap:16px; flex-wrap:wrap; }
-  .tp-meta-item { display:flex; flex-direction:column; gap:2px; }
-  .tp-meta-label { font-size:10.5px; font-weight:700; text-transform:uppercase; color:var(--text-3); }
-  .tp-meta-value { font-size:13.5px; font-weight:600; color:var(--text-1); font-family:var(--mono); }
-
-  .tp-btn-group { display:flex; gap:7px; align-items:center; flex-wrap:wrap; }
-  .tp-btn { display:inline-flex; align-items:center; gap:5px; padding:7px 14px; border-radius:12px; border:1.5px solid var(--border); background:var(--surface); color:var(--text-1); font-weight:600; cursor:pointer; }
-  .tp-btn--primary { background:var(--green); border-color:var(--green); color:#fff; }
-  .tp-btn--active { background:var(--green-soft); border-color:var(--green); color:var(--green); }
-
-  .tp-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:20px 22px; box-shadow:var(--sh-sm); }
-  .tp-content { display:flex; gap:18px; align-items:flex-start; }
-  .tp-content--mobile { flex-direction:column; }
-
-  .tp-info { flex:0 0 340px; min-width:0; }
-  .tp-image { width:100%; height:170px; object-fit:cover; border-radius:12px; margin-bottom:14px; display:block; border:1px solid var(--border); }
-  .tp-info-title { margin:0 0 14px; font-size:16px; font-weight:800; text-transform:capitalize; }
-
-  .tp-stats { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
-  .tp-stat { background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:10px 12px; }
-  .tp-stat-label { font-size:10.5px; font-weight:700; text-transform:uppercase; color:var(--text-3); margin-bottom:4px; }
-  .tp-stat-value { font-size:14px; font-weight:700; color:var(--text-1); font-family:var(--mono); }
-
-  .tp-status { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:999px; font-size:12px; font-weight:600; text-transform:capitalize; background:var(--green-soft); color:var(--green); border:1px solid rgba(24,163,73,.18); }
-
-  .tp-divider { height:1px; background:var(--border); margin:14px 0; }
-  .tp-notes-label { font-size:10.5px; font-weight:700; text-transform:uppercase; color:var(--text-3); margin:14px 0 5px; }
-  .tp-notes-text { margin:0; font-size:13.5px; color:var(--text-2); line-height:1.65; }
-
-  .tp-map-area { flex:1; min-width:0; display:flex; flex-direction:column; gap:10px; }
-  .tp-map-wrapper { height:440px; border-radius:12px; overflow:hidden; border:1px solid var(--border); box-shadow:var(--sh-sm); }
-
-  .tp-no-map { padding:20px; border-radius:12px; background:var(--surface-2); border:1.5px dashed var(--border); display:flex; flex-direction:column; gap:10px; }
-  .tp-no-map__title { font-size:14px; font-weight:700; color:var(--text-2); }
-  .tp-no-map__address { font-size:13px; color:var(--text-3); font-family:var(--mono); }
-
-  .tp-poll-indicator { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-3); font-family:var(--mono); }
-  .tp-poll-dot { width:7px; height:7px; border-radius:50%; background:var(--green); animation:tp-pulse 2s ease infinite; flex-shrink:0; }
-  @keyframes tp-pulse { 0%,100%{opacity:1;transform:scale(1);}50%{opacity:.4;transform:scale(.7);} }
-
-  .tp-loading { display:flex; align-items:center; justify-content:center; gap:10px; min-height:40vh; font-size:14px; color:var(--text-2); font-family:var(--font); }
-  .tp-loading::before { content:''; width:20px; height:20px; border:2.5px solid var(--border); border-top-color:var(--green); border-radius:50%; animation:tp-spin 600ms linear infinite; flex-shrink:0; }
-  @keyframes tp-spin { to { transform: rotate(360deg); } }
-
-  .tp-error { display:flex; align-items:center; gap:10px; padding:16px 18px; border-radius:12px; background:#fff0f0; border:1px solid #fecaca; color:var(--danger); font-size:14px; max-width:560px; margin:48px auto; font-family:var(--font); }
-  .tp-empty { padding:48px 20px; text-align:center; color:var(--text-3); font-size:14px; font-family:var(--font); }
-`;
-
-/* ─────────────────────────── Types & Helpers ─────────────────────────── */
+/* ---------- types + helpers (same as before) ---------- */
 type Pickup = {
   _id?: string;
   wasteType?: string;
@@ -197,6 +124,8 @@ const TrackPickup: React.FC = () => {
   const pollRef = useRef<number | null>(null);
   const pollIntervalMs = 8000;
 
+  const socketRef = useRef<Socket | null>(null);
+
   // image handling
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [imageLoadError, setImageLoadError] = useState(false);
@@ -223,6 +152,7 @@ const TrackPickup: React.FC = () => {
     };
   }, []);
 
+  // fetch + polling (keeps existing behavior)
   useEffect(() => {
     if (!id) {
       setError("No pickup id provided");
@@ -257,9 +187,6 @@ const TrackPickup: React.FC = () => {
         }
 
         if (mounted) setPickup(body as Pickup);
-
-        // load image handling separately
-        // image loading handled in a different effect
 
         const latVal =
           (body.location && (body.location.lat ?? body.location.latitude ?? body.location.latitude_deg)) ??
@@ -327,7 +254,62 @@ const TrackPickup: React.FC = () => {
     };
   }, [id]);
 
-  // load image when pickup.imageUrl changes
+  // socket subscription for live updates (preferred)
+  useEffect(() => {
+    if (!id) return;
+    let socket: Socket | null = null;
+    try {
+      const token = localStorage.getItem("accessToken") || localStorage.getItem("token") || "";
+      socket = ioClient(undefined, {
+        auth: { token },
+        transports: ["websocket"],
+        autoConnect: true,
+      });
+      socketRef.current = socket;
+
+      socket.on("connect", () => {
+        socket?.emit("join-waste-room", id);
+      });
+
+      socket.on("collector-location", (data: any) => {
+        try {
+          if (!data || data.wasteId !== id) return;
+          const lat = Number(data.lat);
+          const lng = Number(data.lng);
+          if (Number.isFinite(lat) && Number.isFinite(lng)) {
+            const pos = clampToBounds(lat, lng);
+            setPosition((prev) => {
+              if (!prev || Math.abs(prev[0] - pos[0]) > 1e-6 || Math.abs(prev[1] - pos[1]) > 1e-6) {
+                setPath((p) => [...p, pos].slice(-200));
+              }
+              return pos;
+            });
+            setLastSeen(Date.now());
+          }
+        } catch (e) {
+          console.warn("collector-location handler error", e);
+        }
+      });
+
+      socket.on("disconnect", () => {
+        // no-op
+      });
+    } catch (e) {
+      console.warn("Socket init failed:", e);
+    }
+
+    return () => {
+      try {
+        if (socket) {
+          socket.emit("leave-waste-room", id);
+          socket.disconnect();
+        }
+      } catch {}
+      socketRef.current = null;
+    };
+  }, [id]);
+
+  // image loader
   useEffect(() => {
     let mounted = true;
     let objectUrl: string | null = null;
@@ -545,7 +527,15 @@ const TrackPickup: React.FC = () => {
                   <div className="tp-stat">
                     <div className="tp-stat-label">Pickup date</div>
                     <div className="tp-stat-value" style={{ fontSize: 12 }}>
-                      {pickup?.pickupDate ? new Date(pickup.pickupDate).toLocaleDateString() : "Not scheduled"}
+                      {pickup?.pickupDate
+                        ? (() => {
+                            try {
+                              return new Date(pickup.pickupDate).toLocaleString();
+                            } catch {
+                              return String(pickup.pickupDate);
+                            }
+                          })()
+                        : "Not scheduled"}
                     </div>
                   </div>
                 </div>

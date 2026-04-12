@@ -1,4 +1,4 @@
-// src/App.tsx (or src/App.jsx)
+// src/App.tsx
 import React, { useState, createContext, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import api from "./api";
@@ -12,6 +12,7 @@ import ManageCollectors from "./pages/admin/ManageCollectors";
 import ManageUsers from "./pages/admin/ManageUsers";
 import PricingManagement from "./pages/admin/PricingManagement";
 import Reports from "./pages/admin/Reports";
+import NotificationsPage from "./pages/NotificationsPage"; // make sure this file exists & has default export
 import WasteCategories from "./pages/admin/WasteCategories";
 import Certificates from "./pages/Certificates";
 import CollectorDashboard from "./pages/CollectorDashboard";
@@ -21,6 +22,8 @@ import ProfilePage from "./pages/ProfilePage";
 import AssignedPickups from "./pages/AssignedPickups";
 import Explore from "./pages/Explore";
 import MyPickups from "./pages/MyPickup";
+import HistoryPage from "./pages/HistoryPage";
+import SchedulePickup from "./pages/SchedulePickup";
 import AvailablePickups from "./pages/AvailablePickup";
 import CollectorAnalytics from "./pages/CollectorAnalytics";
 import CollectorHistory from "./pages/CollectorHistory";
@@ -29,8 +32,8 @@ import AdminAssignPickups from "./pages/admin/AdminAssignPickups";
 import ContactSupportPage from "./pages/ContactPage";
 import FAQPage from "./pages/FAQPage";
 import RecyclingTipsPage from "./pages/RecyclingTipsPage";
-
-
+import "./index.css";
+import AdminPendingApprovals from "./pages/admin/AdminPendingApprovals";
 /* -------------------- Auth context -------------------- */
 
 export interface IAuthContext {
@@ -102,12 +105,14 @@ function App() {
 
   const [authLoading, setAuthLoading] = useState(true);
 
+  // Attach token to all axios requests
   useEffect(() => {
     const reqInterceptor = api.interceptors.request.use(
       (config) => {
         try {
           const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
-          if (token && config.headers) {
+          if (token) {
+            config.headers = config.headers || {};
             config.headers.Authorization = `Bearer ${token}`;
           }
         } catch (e) {}
@@ -137,6 +142,7 @@ function App() {
     };
   }, []);
 
+  // Verify token on load
   useEffect(() => {
     let mounted = true;
 
@@ -235,7 +241,7 @@ function App() {
               <Route path="/faq" element={<FAQPage />} />
               <Route path="/support" element={<ContactSupportPage />} />
               <Route path="/recycling-tips" element={<RecyclingTipsPage />} />
-              
+
               {/* Protected Routes */}
               <Route path="/dashboard" element={authState.isAuth ? <Dashboard /> : <Navigate to="/" />} />
 
@@ -303,7 +309,7 @@ function App() {
                 element={authState.isAuth && authState.roleState === "admin" ? <CreateCertificate /> : <Navigate to="/" />}
               />
 
-              {/* Admin assign pickups (new) */}
+              {/* Admin assign pickups */}
               <Route
                 path="/admin/assign-pickups"
                 element={
@@ -316,6 +322,18 @@ function App() {
                   )
                 }
               />
+              <Route
+                  path="/admin/pending-approvals"
+                  element={
+                    authState.isAuth && authState.roleState === "admin" ? (
+                      <ErrorBoundary>
+                        <AdminPendingApprovals />
+                      </ErrorBoundary>
+                    ) : (
+                      <Navigate to="/" />
+                    )
+                  }
+                />
 
               {/* Collector routes */}
               <Route
@@ -324,7 +342,13 @@ function App() {
               />
               <Route
                 path="/collector"
-                element={authState.isAuth && authState.roleState === "collector" ? <Navigate to="/collector/dashboard" replace /> : <Navigate to="/" />}
+                element={
+                  authState.isAuth && authState.roleState === "collector" ? (
+                    <Navigate to="/collector/dashboard" replace />
+                  ) : (
+                    <Navigate to="/" />
+                  )
+                }
               />
               <Route
                 path="/collector/rewards"
@@ -346,10 +370,19 @@ function App() {
                 path="/collector/history"
                 element={authState.isAuth && authState.roleState === "collector" ? <CollectorHistory /> : <Navigate to="/" />}
               />
+              <Route
+                path="/collector/notifications"
+                element={authState.isAuth && authState.roleState === "collector" ? <NotificationsPage /> : <Navigate to="/" />}
+              />
+
+              {/* Shared notifications page */}
+              <Route path="/notifications" element={authState.isAuth ? <NotificationsPage /> : <Navigate to="/" />} />
 
               <Route path="/post-waste" element={authState.isAuth ? <PostWaste /> : <Navigate to="/" />} />
               <Route path="/track/:id" element={authState.isAuth ? <TrackPickup /> : <Navigate to="/" />} />
+              <Route path="/history" element={authState.isAuth ? <HistoryPage /> : <Navigate to="/" />} />
               <Route path="/pickups" element={authState.isAuth ? <MyPickups /> : <Navigate to="/" />} />
+              <Route path="/schedule-pickup" element={authState.isAuth ? <SchedulePickup /> : <Navigate to="/" />} />
 
               {/* Rewards & other pages */}
               <Route path="/rewards" element={authState.isAuth ? <RewardsPage /> : <Navigate to="/" />} />
@@ -357,7 +390,16 @@ function App() {
               <Route path="/profile" element={authState.isAuth ? <ProfilePage /> : <Navigate to="/" />} />
 
               {/* Landing */}
-              <Route path="/" element={!authState.isAuth ? <HomePage /> : <Navigate to={getDefaultRouteForRole(authState.roleState)} replace />} />
+              <Route
+                path="/"
+                element={
+                  !authState.isAuth ? (
+                    <HomePage />
+                  ) : (
+                    <Navigate to={getDefaultRouteForRole(authState.roleState)} replace />
+                  )
+                }
+              />
 
               {/* Fallback */}
               <Route path="*" element={<Navigate to="/" replace />} />

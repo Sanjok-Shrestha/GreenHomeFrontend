@@ -1,0 +1,296 @@
+
+.admin-page-root {
+  display: flex;
+  min-height: 100vh;
+  background: #f3f4f3;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #163426;
+}
+
+.admin-main {
+  flex: 1;
+  padding: 20px 22px 24px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+.admin-header h1 {
+  font-size: 18px;
+  font-weight: 650;
+  color: #123524;
+  letter-spacing: -0.02em;
+}
+
+/* Header actions */
+.admin-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-actions button {
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(12, 68, 37, 0.12);
+  background: #ffffff;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1c3d2a;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease, transform 0.08s ease, box-shadow 0.16s ease;
+}
+
+.admin-actions button:hover:not(:disabled) {
+  background: #e3f5eb;
+  border-color: rgba(12, 68, 37, 0.25);
+  color: #0d5b34;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  transform: translateY(-1px);
+}
+
+.admin-actions button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.admin-actions button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* ============================================================
+   STATES
+   ============================================================ */
+
+.admin-loading {
+  padding: 40px 12px;
+  text-align: center;
+  font-size: 14px;
+  color: #617d6a;
+}
+
+.admin-error {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #fff6f4;
+  border: 1px solid #f4c7b7;
+  color: #7a2b14;
+  font-size: 13px;
+}
+
+.admin-empty {
+  padding: 40px 16px;
+  text-align: center;
+  font-size: 14px;
+  color: #f3f5f4;
+}
+
+/* ============================================================
+   LIST + CARDS
+   ============================================================ */
+
+.admin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+/* Card container */
+.admin-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #e0efe5;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  transition: box-shadow 0.16s ease, border-color 0.16s ease, transform 0.12s ease, background 0.16s ease;
+}
+
+.admin-card:hover {
+  border-color: #c3e4d3;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.06);
+  transform: translateY(-1px);
+  background: #fbfffd;
+}
+
+.admin-card-left {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Title (waste type) */
+.admin-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #163426;
+  margin-bottom: 4px;
+}
+
+/* Meta row: qty, location, createdAt */
+.admin-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #4c6a57;
+  margin-bottom: 6px;
+}
+
+/* Scheduled info */
+.admin-card-schedule {
+  font-size: 12px;
+  color: #0f6b3c;
+  margin-bottom: 6px;
+}
+
+/* Parties (owner / collector) */
+.admin-card-parties {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12px;
+  color: #2b4636;
+}
+
+.admin-card-parties div span.label {
+  font-weight: 500;
+}
+
+/* Right side: actions */
+.admin-card-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.admin-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Action buttons on card */
+.admin-card-actions button {
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(16, 74, 41, 0.12);
+  font-size: 12px;
+  font-weight: 500;
+  background: #f7fbf8;
+  color: #184330;
+  cursor: pointer;
+  min-width: 86px;
+  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease, transform 0.08s ease, box-shadow 0.16s ease;
+}
+
+/* "Open" neutral action */
+.admin-card-actions button:first-child {
+  background: #ffffff;
+}
+
+/* Approve */
+.admin-card-actions button:nth-child(2) {
+  background: #18a165;
+  border-color: #18a165;
+  color: #ffffff;
+}
+
+/* Reject */
+.admin-card-actions button:nth-child(3) {
+  background: #fff1f0;
+  border-color: #f4b6aa;
+  color: #a0342b;
+}
+
+.admin-card-actions button:hover:not(:disabled) {
+  transform: translateY(-0.5px);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+/* Hover tweaks per type */
+.admin-card-actions button:first-child:hover:not(:disabled) {
+  background: #eef5f1;
+  border-color: rgba(16, 74, 41, 0.22);
+}
+
+.admin-card-actions button:nth-child(2):hover:not(:disabled) {
+  background: #0f8a55;
+  border-color: #0f8a55;
+}
+
+.admin-card-actions button:nth-child(3):hover:not(:disabled) {
+  background: #ffe3df;
+}
+
+/* Disabled (busy) */
+.admin-card-actions button:disabled {
+  opacity: 0.7;
+  cursor: default;
+  box-shadow: none;
+  transform: none;
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 900px) {
+  .admin-main {
+    padding: 16px 14px 20px;
+  }
+}
+
+@media (max-width: 720px) {
+  .admin-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .admin-actions {
+    justify-content: flex-start;
+  }
+
+  .admin-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .admin-card-right {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .admin-card-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-main {
+    padding-inline: 10px;
+  }
+  .admin-card {
+    padding: 10px 11px;
+  }
+  .admin-card-parties {
+    flex-direction: column;
+  }
+}

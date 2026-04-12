@@ -1,4 +1,11 @@
-import { useCallback, useContext, useEffect, useMemo, useState, type JSX } from "react";
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type JSX,
+} from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
 import { AuthContext } from "../App";
@@ -40,7 +47,6 @@ const css = `
     --sh-lg:        0 20px 48px rgba(0,0,0,.1), 0 6px 16px rgba(0,0,0,.05);
   }
 
-  /* ── Root layout ── */
   .cd-root {
     display: flex;
     min-height: 100vh;
@@ -50,7 +56,6 @@ const css = `
     -webkit-font-smoothing: antialiased;
   }
 
-  /* ── Main ── */
   .cd-main {
     flex: 1;
     padding: 32px 28px 48px;
@@ -64,7 +69,6 @@ const css = `
     to   { opacity: 1; transform: translateY(0); }
   }
 
-  /* ── Header ── */
   .cd-header {
     display: flex;
     justify-content: space-between;
@@ -94,7 +98,6 @@ const css = `
     flex-wrap: wrap;
   }
 
-  /* ── KPI strip ── */
   .cd-kpis {
     display: flex;
     gap: 8px;
@@ -140,7 +143,6 @@ const css = `
     text-transform: uppercase;
   }
 
-  /* ── Avatar button ── */
   .cd-avatar {
     width: 44px;
     height: 44px;
@@ -162,7 +164,6 @@ const css = `
     box-shadow: 0 6px 18px var(--green-glow);
   }
 
-  /* ── Grid ── */
   .cd-grid {
     display: flex;
     gap: 16px;
@@ -177,7 +178,6 @@ const css = `
     .cd-col-right { width: 100%; }
   }
 
-  /* ── Card ── */
   .cd-card {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -212,7 +212,6 @@ const css = `
     gap: 8px;
   }
 
-  /* ── List ── */
   .cd-list {
     display: flex;
     flex-direction: column;
@@ -222,7 +221,6 @@ const css = `
     list-style: none;
   }
 
-  /* ── List item (horizontal) ── */
   .cd-item {
     display: flex;
     align-items: center;
@@ -272,7 +270,6 @@ const css = `
     flex-shrink: 0;
   }
 
-  /* ── List item vertical (available pickups) ── */
   .cd-item--v {
     flex-direction: column;
     align-items: stretch;
@@ -283,14 +280,12 @@ const css = `
   .cd-item--v:hover { transform: none; }
 
   .cd-item--v .cd-item__meta { width: 100%; }
-
   .cd-item--v .cd-item__aside {
     width: 100%;
     justify-content: flex-end;
     flex-wrap: wrap;
   }
 
-  /* ── Badge ── */
   .cd-badge {
     display: inline-flex;
     align-items: center;
@@ -303,7 +298,6 @@ const css = `
     white-space: nowrap;
   }
 
-  /* ── Buttons ── */
   .cd-btn {
     display: inline-flex;
     align-items: center;
@@ -346,7 +340,6 @@ const css = `
 
   .cd-btn--sm { padding: 5px 10px; font-size: 12px; }
 
-  /* ── View link ── */
   .cd-link {
     font-size: 13px;
     font-weight: 600;
@@ -354,12 +347,8 @@ const css = `
     text-decoration: none;
     transition: color 120ms;
   }
-
   .cd-link:hover { color: #15903f; text-decoration: underline; }
 
-  /* ── Earnings card (removed) ── */
-
-  /* ── Tips list ── */
   .cd-tips {
     margin: 0;
     padding: 0;
@@ -394,7 +383,6 @@ const css = `
     margin-top: 1px;
   }
 
-  /* ── Skeleton ── */
   .cd-skeleton {
     background: linear-gradient(90deg, #eaede9 0%, #f4f6f3 50%, #eaede9 100%);
     background-size: 200% 100%;
@@ -413,7 +401,6 @@ const css = `
     align-items: center;
   }
 
-  /* ── Empty / Error ── */
   .cd-empty {
     font-size: 13px;
     color: var(--text-3);
@@ -431,7 +418,6 @@ const css = `
     margin-top: 4px;
   }
 
-  /* ── Divider ── */
   .cd-divider {
     height: 1px;
     background: var(--border);
@@ -439,7 +425,6 @@ const css = `
   }
 `;
 
-/* ─────────────────────────── Helpers ─────────────────────────── */
 function badgeStyle(status?: string): React.CSSProperties {
   const s = (status ?? "").toLowerCase();
   if (s.includes("completed")) return { background: "#dcfce7", color: "#15803d" };
@@ -457,7 +442,6 @@ type PickupPreview = {
   status?: string; createdAt?: string; user?: { name?: string }; image?: string | null;
 };
 
-/* ─────────────────────────── Component ─────────────────────────── */
 export default function CollectorDashboard(): JSX.Element {
   const navigate = useNavigate();
   const auth = useContext(AuthContext) as AuthContextShape | undefined;
@@ -486,7 +470,6 @@ export default function CollectorDashboard(): JSX.Element {
       setLoadingRecent(true);
       try {
         const [statsRes, recentRes] = await Promise.allSettled([
-          // FIXED: call without duplicating "/api"
           api.get("/collector/stats").catch(() => null),
           api.get("/waste/collector/assigned?limit=5").catch(() => null),
         ]);
@@ -494,24 +477,40 @@ export default function CollectorDashboard(): JSX.Element {
         if (statsRes.status === "fulfilled" && statsRes.value?.data) {
           const d = statsRes.value.data;
           setStats([
-            { label: "Assigned",          value: d.assigned      ?? 0 },
+            { label: "Assigned",          value: d.assigned       ?? 0 },
             { label: "Completed (month)", value: d.completedMonth ?? 0 },
             { label: "Kg Collected",      value: d.kgCollected    ?? 0 },
           ]);
         }
         if (recentRes.status === "fulfilled" && recentRes.value?.data) {
-          const arr = Array.isArray(recentRes.value.data) ? recentRes.value.data : recentRes.value.data?.data ?? [];
-          setRecent(arr.slice(0, 5).map((p: any) => ({
-            _id: p._id ?? p.id ?? String(Math.random()).slice(2),
-            wasteType: p.wasteType ?? p.type ?? "Unknown",
-            quantity:  p.quantity ?? 0,
-            status:    p.status ?? "unknown",
-            createdAt: p.createdAt ?? p.created_at,
-            user:      p.user ?? undefined,
-          })));
-        } else setRecent([]);
-      } catch (e) { setRecent([]); }
-      finally { if (mounted) setLoadingRecent(false); }
+          const arrRaw = Array.isArray(recentRes.value.data)
+            ? recentRes.value.data
+            : recentRes.value.data?.data ?? [];
+          // sort by createdAt (newest first) and keep only 2 latest
+          const sorted = [...arrRaw].sort((a: any, b: any) => {
+            const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return db - da;
+          });
+          const limited = sorted.slice(0, 2);
+          setRecent(
+            limited.map((p: any) => ({
+              _id: p._id ?? p.id ?? String(Math.random()).slice(2),
+              wasteType: p.wasteType ?? p.type ?? "Unknown",
+              quantity:  p.quantity ?? 0,
+              status:    p.status ?? "unknown",
+              createdAt: p.createdAt ?? p.created_at,
+              user:      p.user ?? undefined,
+            }))
+          );
+        } else {
+          setRecent([]);
+        }
+      } catch {
+        setRecent([]);
+      } finally {
+        if (mounted) setLoadingRecent(false);
+      }
     })();
     return () => { mounted = false; };
   }, []);
@@ -520,22 +519,32 @@ export default function CollectorDashboard(): JSX.Element {
     setLoadingAvailable(true);
     setAvailableError(null);
     try {
-      // FIXED: call without duplicating "/api"
       const res = await api.get("/waste/available?limit=6");
       const raw = res?.data;
-      let arr: any[] = Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : Array.isArray(raw?.items) ? raw.items : [];
-      setAvailable(arr.slice(0, 6).map((p: any) => ({
-        _id:       p._id ?? p.id ?? String(Math.random()).slice(2),
-        wasteType: p.wasteType ?? p.type ?? "Unknown",
-        quantity:  p.quantity ?? 0,
-        status:    p.status ?? "pending",
-        createdAt: p.createdAt ?? p.created_at,
-        user:      p.user ?? p.requester ?? undefined,
-        image:     p.image ?? p.imageUrl ?? null,
-      })));
+      let arr: any[] =
+        Array.isArray(raw) ? raw :
+        Array.isArray(raw?.data) ? raw.data :
+        Array.isArray(raw?.items) ? raw.items : [];
+      setAvailable(
+        arr.slice(0, 6).map((p: any) => ({
+          _id:       p._id ?? p.id ?? String(Math.random()).slice(2),
+          wasteType: p.wasteType ?? p.type ?? "Unknown",
+          quantity:  p.quantity ?? 0,
+          status:    p.status ?? "pending",
+          createdAt: p.createdAt ?? p.created_at,
+          user:      p.user ?? p.requester ?? undefined,
+          image:     p.image ?? p.imageUrl ?? null,
+        }))
+      );
     } catch (err: any) {
-      setAvailableError(err?.response?.data?.message || err?.message || "Failed to load available pickups");
-    } finally { setLoadingAvailable(false); }
+      setAvailableError(
+        err?.response?.data?.message ||
+        err?.message ||
+        "Failed to load available pickups"
+      );
+    } finally {
+      setLoadingAvailable(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -554,7 +563,6 @@ export default function CollectorDashboard(): JSX.Element {
     const prev = available;
     setAvailable((cur) => cur.filter((x) => x._id !== id));
     try {
-      // FIXED: call without duplicating "/api"
       const res = await api.post(`/waste/${id}/assign`);
       if (res?.data?.error) throw new Error(res.data.error);
       await fetchAvailable();
@@ -562,7 +570,11 @@ export default function CollectorDashboard(): JSX.Element {
       navigate("/collector/assigned");
     } catch (err: any) {
       setAvailable(prev);
-      setAvailableError(err?.response?.data?.message || err?.message || "Failed to assign pickup");
+      setAvailableError(
+        err?.response?.data?.message ||
+        err?.message ||
+        "Failed to assign pickup"
+      );
       setTimeout(() => setAvailableError(null), 3000);
     } finally { setAssigning(id, false); }
   }, [available, fetchAvailable, navigate, setAssigning]);
@@ -575,7 +587,6 @@ export default function CollectorDashboard(): JSX.Element {
 
   const firstName = useMemo(() => user?.name?.split(" ")?.[0] ?? "Collector", [user]);
 
-  /* ─── Skeleton rows ─── */
   const SkeletonRows = () => (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {[0,1,2].map((i) => (
@@ -597,8 +608,6 @@ export default function CollectorDashboard(): JSX.Element {
       <CollectorSidebar />
 
       <main className="cd-main" role="main">
-
-        {/* ── Header ── */}
         <header className="cd-header">
           <div>
             <h1 className="cd-title">Welcome, {firstName}!</h1>
@@ -615,44 +624,61 @@ export default function CollectorDashboard(): JSX.Element {
               ))}
             </div>
 
-            <button className="cd-avatar" onClick={() => navigate("/profile")}
-              aria-label={user?.name ?? "Profile"} title={user?.name ?? "Profile"}>
+            <button
+              className="cd-avatar"
+              onClick={() => navigate("/profile")}
+              aria-label={user?.name ?? "Profile"}
+              title={user?.name ?? "Profile"}
+            >
               {(user?.name?.charAt(0) ?? "C").toUpperCase()}
             </button>
           </div>
         </header>
 
-        {/* ── Body grid ── */}
         <section className="cd-grid">
-
-          {/* ── Left column ── */}
           <div className="cd-col-left">
-
-            {/* Recent assigned */}
+            {/* Recent assigned (only 2 latest) */}
             <div className="cd-card">
               <div className="cd-card__head">
                 <h3 className="cd-card__title">Recent Assigned Pickups</h3>
                 <Link to="/collector/assigned" className="cd-link">See all →</Link>
               </div>
 
-              {loadingRecent ? <SkeletonRows /> : recent.length === 0 ? (
+              {loadingRecent ? (
+                <SkeletonRows />
+              ) : recent.length === 0 ? (
                 <div className="cd-empty">No recent pickups assigned.</div>
               ) : (
                 <ul className="cd-list" aria-live="polite">
                   {recent.map((p) => (
-                    <li key={p._id} className="cd-item"
+                    <li
+                      key={p._id}
+                      className="cd-item"
                       onClick={() => navigate(`/collector/history/${p._id}`)}
-                      role="button" tabIndex={0}
-                      onKeyDown={(e) => e.key === "Enter" && navigate(`/collector/history/${p._id}`)}>
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => e.key === "Enter" && navigate(`/collector/history/${p._id}`)}
+                    >
                       <div className="cd-item__meta">
                         <div className="cd-item__title">{p.wasteType}</div>
                         <div className="cd-item__sub">{p.quantity} kg</div>
-                        {p.createdAt && <div className="cd-item__time">{new Date(p.createdAt).toLocaleString()}</div>}
+                        {p.createdAt && (
+                          <div className="cd-item__time">
+                            {new Date(p.createdAt).toLocaleString()}
+                          </div>
+                        )}
                       </div>
                       <div className="cd-item__aside">
-                        <span className="cd-badge" style={badgeStyle(p.status)}>{p.status ?? "unknown"}</span>
-                        <Link to={`/collector/history/${p._id}`} className="cd-link"
-                          onClick={(e) => e.stopPropagation()}>View</Link>
+                        <span className="cd-badge" style={badgeStyle(p.status)}>
+                          {p.status ?? "unknown"}
+                        </span>
+                        <Link
+                          to={`/collector/history/${p._id}`}
+                          className="cd-link"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          View
+                        </Link>
                       </div>
                     </li>
                   ))}
@@ -665,10 +691,16 @@ export default function CollectorDashboard(): JSX.Element {
               <div className="cd-card__head">
                 <h3 className="cd-card__title">Available Pickups</h3>
                 <div className="cd-card__actions">
-                  <button className="cd-btn cd-btn--sm" onClick={fetchAvailable} disabled={loadingAvailable}>
+                  <button
+                    className="cd-btn cd-btn--sm"
+                    onClick={fetchAvailable}
+                    disabled={loadingAvailable}
+                  >
                     {loadingAvailable ? "Refreshing…" : "↻ Refresh"}
                   </button>
-                  <Link to="/collector/available" className="cd-link">See all →</Link>
+                  <Link to="/collector/available" className="cd-link">
+                    See all →
+                  </Link>
                 </div>
               </div>
 
@@ -682,22 +714,43 @@ export default function CollectorDashboard(): JSX.Element {
                 <ul className="cd-list" aria-live="polite">
                   {available.map((p) => (
                     <li key={p._id} className="cd-item cd-item--v">
-                      <div className="cd-item__meta"
+                      <div
+                        className="cd-item__meta"
                         onClick={() => navigate(`/collector/history/${p._id}`)}
-                        role="button" tabIndex={0}
-                        onKeyDown={(e) => e.key === "Enter" && navigate(`/collector/history/${p._id}`)}>
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) =>
+                          e.key === "Enter" && navigate(`/collector/history/${p._id}`)
+                        }
+                      >
                         <div className="cd-item__title">{p.wasteType}</div>
-                        <div className="cd-item__sub">{p.quantity} kg • {p.user?.name ?? "User"}</div>
-                        {p.createdAt && <div className="cd-item__time">{new Date(p.createdAt).toLocaleString()}</div>}
+                        <div className="cd-item__sub">
+                          {p.quantity} kg • {p.user?.name ?? "User"}
+                        </div>
+                        {p.createdAt && (
+                          <div className="cd-item__time">
+                            {new Date(p.createdAt).toLocaleString()}
+                          </div>
+                        )}
                       </div>
                       <div className="cd-item__aside">
-                        <span className="cd-badge" style={badgeStyle(p.status)}>{p.status ?? "pending"}</span>
-                        <button className="cd-btn cd-btn--primary cd-btn--sm"
-                          onClick={() => claimPickup(p._id)} disabled={!!assigningIds[p._id]}>
+                        <span className="cd-badge" style={badgeStyle(p.status)}>
+                          {p.status ?? "pending"}
+                        </span>
+                        <button
+                          className="cd-btn cd-btn--primary cd-btn--sm"
+                          onClick={() => claimPickup(p._id)}
+                          disabled={!!assigningIds[p._id]}
+                        >
                           {assigningIds[p._id] ? "Assigning…" : "Assign to me"}
                         </button>
-                        <Link to={`/collector/history/${p._id}`} className="cd-link"
-                          onClick={(e) => e.stopPropagation()}>View</Link>
+                        <Link
+                          to={`/collector/history/${p._id}`}
+                          className="cd-link"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          View
+                        </Link>
                       </div>
                     </li>
                   ))}
@@ -706,10 +759,11 @@ export default function CollectorDashboard(): JSX.Element {
             </div>
           </div>
 
-          {/* ── Right column ── */}
           <aside className="cd-col-right">
             <div className="cd-card">
-              <h3 className="cd-card__title" style={{ marginBottom: 12 }}>Tips</h3>
+              <h3 className="cd-card__title" style={{ marginBottom: 12 }}>
+                Tips
+              </h3>
               <ul className="cd-tips">
                 <li>Communicate with users for timely pickups</li>
                 <li>Confirm weights on pickup for accurate payouts</li>
@@ -717,7 +771,6 @@ export default function CollectorDashboard(): JSX.Element {
               </ul>
             </div>
           </aside>
-
         </section>
       </main>
     </div>

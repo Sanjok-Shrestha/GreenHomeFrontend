@@ -54,10 +54,12 @@ button { cursor: pointer; font-family: var(--font); }
 /* ============================================================
    PAGE SHELL
    ============================================================ */
+
+/* Full‑width content: no max-width, no side padding */
 .rp-page {
-  max-width: 1100px;
-  margin: 24px auto;
-  padding: 0 20px 64px;
+  width: 100%;
+  margin: 0;
+  padding: 12px 0 64px;  /* top 12px, no left/right, bottom 64px */
   font-family: var(--font);
   color: var(--text-primary);
   display: flex;
@@ -163,8 +165,12 @@ button { cursor: pointer; font-family: var(--font); }
   background: var(--bg-card);
   color: var(--text-secondary);
   white-space: nowrap;
-  transition: background var(--transition), color var(--transition),
-              border-color var(--transition), transform 0.1s, opacity var(--transition);
+  transition:
+    background var(--transition),
+    color var(--transition),
+    border-color var(--transition),
+    transform 0.1s,
+    opacity var(--transition);
 }
 .rp-btn:hover:not(:disabled) { background: var(--bg-inset); color: var(--text-primary); }
 .rp-btn:active:not(:disabled) { transform: scale(0.97); }
@@ -394,7 +400,7 @@ button { cursor: pointer; font-family: var(--font); }
    RESPONSIVE
    ============================================================ */
 @media (max-width: 700px) {
-  .rp-page   { padding: 12px 12px 48px; }
+  .rp-page   { padding: 12px 0 48px; }
   .rp-title  { font-size: 17px; }
   .rp-toolbar { gap: 8px; }
   .rp-toolbar__actions { margin-left: 0; }

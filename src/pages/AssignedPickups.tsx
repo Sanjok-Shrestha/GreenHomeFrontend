@@ -1,15 +1,12 @@
-// src/pages/AssignedPickups.tsx
-import React, { useCallback, useEffect, useMemo, useState, type JSX } from "react";
+import { useCallback, useEffect, useMemo, useState, type JSX } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api";
 import CollectorSidebar from "../components/CollectorSidebar";
 import "./AssignedPickups.css";
 
 /* ── Types ── */
-type UserRef = {
-  _id?: string; name?: string; phone?: string; address?: string; email?: string;
-};
-type PickupStatus = "Pending" | "Scheduled" | "Picked" | "Collected" | string;
+type UserRef = { _id?: string; name?: string; phone?: string; address?: string; email?: string; };
+type PickupStatus = "Pending" | "Scheduled" | "Picked" | "CollectedPending" | "Collected" | "Completed" | string;
 type Pickup = {
   _id: string; user: UserRef; wasteType: string; quantity: number;
   status: PickupStatus; image?: string | null; createdAt?: string; location?: string;
@@ -19,27 +16,27 @@ const PAGE_SIZE = 10;
 
 function statusClass(status: string) {
   const s = (status || "").toLowerCase();
-  if (s === "collected" || s === "completed") return "ap-status ap-status--collected";
+  if (s === "completed" || s === "collected") return "ap-status ap-status--collected";
   if (s === "picked" || s === "scheduled")   return "ap-status ap-status--picked";
+  if (s.includes("pending") || s.includes("awaiting") || s.includes("approval")) return "ap-status ap-status--pending-approval";
   return "ap-status ap-status--pending";
 }
 
-/* ── Component ── */
 export default function AssignedPickups(): JSX.Element {
   const navigate = useNavigate();
 
-  const [pickups,     setPickups]     = useState<Pickup[]>([]);
-  const [loading,     setLoading]     = useState(true);
-  const [error,       setError]       = useState<string | null>(null);
+  const [pickups, setPickups] = useState<Pickup[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [updatingIds, setUpdatingIds] = useState<Record<string, boolean>>({});
-  const [toast,       setToast]       = useState<string | null>(null);
-  const [page,        setPage]        = useState(1);
+  const [toast, setToast] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   const fetchAssigned = useCallback(async (signal?: AbortSignal) => {
     setLoading(true); setError(null);
     try {
-      const res = await api.get<Pickup[] | { data: Pickup[] }>("/waste/collector/assigned", { signal });
-      const items: Pickup[] = Array.isArray(res.data) ? res.data : res.data?.data ?? [];
+      const res = await api.get("/waste/collector/assigned", { signal });
+      const items = Array.isArray(res.data) ? res.data : res.data?.data ?? [];
       setPickups(items);
     } catch (err: any) {
       if (err?.code === "ERR_CANCELED") return;
@@ -54,16 +51,22 @@ export default function AssignedPickups(): JSX.Element {
     return () => ctrl.abort();
   }, [fetchAssigned]);
 
+  useEffect(() => {
+    const id = setInterval(() => fetchAssigned(), 15000);
+    return () => clearInterval(id);
+  }, [fetchAssigned]);
+
   const setUpdating = (id: string, v: boolean) =>
     setUpdatingIds((s) => { const c = { ...s }; if (v) c[id] = true; else delete c[id]; return c; });
 
   async function tryUpdateEndpoints(id: string, statusPayload: any) {
-    const attempts: { method: "patch" | "post" | "put"; url: string; body?: any }[] = [
-      { method: "patch", url: `/waste/${id}/status`,  body: statusPayload },
-      { method: "patch", url: `/waste/${id}`,          body: statusPayload },
-      { method: "post",  url: `/waste/${id}/status`,  body: statusPayload },
-      { method: "put",   url: `/waste/complete/${id}` },
-      { method: "post",  url: `/waste/complete/${id}` },
+    const attempts = [
+      { method: "patch", url: `/waste/${id}/status`, body: statusPayload },
+      { method: "patch", url: `/waste/${id}`, body: statusPayload },
+      { method: "post", url: `/waste/${id}/status`, body: statusPayload },
+      { method: "post", url: `/waste/complete/${id}` },
+      { method: "put", url: `/waste/complete/${id}` },
+      { method: "post", url: `/waste/${id}/collect` }, // optional
     ];
     const tried: any[] = [];
     for (const a of attempts) {
@@ -85,19 +88,27 @@ export default function AssignedPickups(): JSX.Element {
 
   const updatePickupStatus = async (id: string, serverStatus: string) => {
     const confirmMsg =
-      serverStatus.toLowerCase() === "picked"    ? "Mark this pickup as 'Picked Up'?" :
+      serverStatus.toLowerCase() === "picked" ? "Mark this pickup as 'Picked Up'?" :
       serverStatus.toLowerCase() === "collected" ? "Mark this pickup as 'Collected'? This will finalize the job." :
       `Change status to ${serverStatus}?`;
     if (!window.confirm(confirmMsg)) return;
 
     setUpdating(id, true);
     const prev = pickups;
+    // optimistic
     setPickups((cur) => cur.map((p) => p._id === id ? { ...p, status: serverStatus } : p));
     try {
       const result = await tryUpdateEndpoints(id, { status: serverStatus });
       if (result.ok) {
-        const lowered = serverStatus.toLowerCase();
-        if (lowered === "collected" || lowered === "completed") {
+        const serverStatusFromRes = result.res?.data?.data?.status ?? result.res?.data?.status ?? serverStatus;
+        const lowered = String(serverStatusFromRes || serverStatus).toLowerCase();
+
+        // Exclude any 'collected'/'completed' from view — they go to collector history
+        if (lowered.includes("pending") || (lowered.includes("awaiting") && !lowered.includes("collected"))) {
+          setPickups((cur) => cur.map(p => p._id === id ? { ...p, status: serverStatusFromRes } : p));
+          setToast("Marked collected — awaiting admin approval");
+        } else if (lowered.includes("collected") || lowered.includes("completed")) {
+          // final — remove from assigned list (collector history handles completed)
           setPickups((cur) => cur.filter((p) => p._id !== id));
           setToast("Pickup completed — moved to history");
           setTimeout(() => navigate("/collector/history"), 700);
@@ -107,7 +118,7 @@ export default function AssignedPickups(): JSX.Element {
         }
       } else {
         const last = (result.tried ?? []).slice(-1)[0];
-        const msg  = last?.err?.response?.data?.message ?? last?.err?.message ?? "Failed to update status";
+        const msg = last?.err?.response?.data?.message ?? last?.err?.message ?? "Failed to update status";
         setPickups(prev);
         setToast(msg);
       }
@@ -121,9 +132,18 @@ export default function AssignedPickups(): JSX.Element {
   };
 
   const handleView = (id: string) => navigate(`/track/${id}`);
-  const visible    = useMemo(() => pickups.slice(0, page * PAGE_SIZE), [pickups, page]);
 
-  /* ── Loading ── */
+  // Exclude any pickups that are 'collected' or 'completed' (case-insensitive)
+  const activePickups = useMemo(
+    () => pickups.filter(p => {
+      const s = String(p.status || "").toLowerCase();
+      return !s.includes("collected") && !s.includes("completed");
+    }),
+    [pickups]
+  );
+
+  const visible = useMemo(() => activePickups.slice(0, page * PAGE_SIZE), [activePickups, page]);
+
   if (loading) return (
     <div className="collector-root">
       <CollectorSidebar />
@@ -133,69 +153,42 @@ export default function AssignedPickups(): JSX.Element {
     </div>
   );
 
-  /* ── Main ── */
   return (
     <div className="collector-root" role="application">
       <CollectorSidebar />
-
       <main className="collector-main" role="main">
-
-        {/* ── Header ── */}
         <header className="collector-header">
           <div>
             <h1 className="collector-title">Assigned Pickups</h1>
             <p className="collector-sub">Pickups currently assigned to you</p>
           </div>
           <div className="collector-header__right">
-            <span className="collector-count">{pickups.length} assigned</span>
+            <span className="collector-count">{activePickups.length} assigned</span>
             <button className="ap-btn ap-btn--primary" onClick={() => fetchAssigned()} disabled={loading}>
               {loading ? "Refreshing…" : "↻ Refresh"}
             </button>
           </div>
         </header>
 
-        {/* ── Toast ── */}
-        {toast && (
-          <div className="ap-toast" role="status" aria-live="polite">{toast}</div>
-        )}
+        {toast && <div className="ap-toast" role="status" aria-live="polite">{toast}</div>}
+        {error && <div className="ap-error">⚠ {error}</div>}
+        {!error && activePickups.length === 0 && <div className="ap-empty">No pickups assigned to you yet.</div>}
 
-        {/* ── Error ── */}
-        {error && (
-          <div className="ap-error">⚠ {error}</div>
-        )}
-
-        {/* ── Empty ── */}
-        {!error && !pickups.length && (
-          <div className="ap-empty">No pickups assigned to you yet.</div>
-        )}
-
-        {/* ── Cards ── */}
-        {!error && pickups.length > 0 && (
+        {!error && activePickups.length > 0 && (
           <section className="ap-grid">
             {visible.map((p) => {
               const statusKey = (p.status || "pending").toLowerCase();
+              const awaitingApproval = statusKey.includes("pending") || statusKey.includes("awaiting") || statusKey.includes("approval");
               return (
-                <article
-                  key={p._id}
-                  className="ap-card"
-                  data-status={statusKey}
-                  aria-labelledby={`pickup-name-${p._id}`}
-                >
+                <article key={p._id} className="ap-card" data-status={statusKey} aria-labelledby={`pickup-name-${p._id}`}>
                   <div className="ap-card__body">
-
-                    {/* ── Left: info ── */}
                     <div className="ap-card__left">
-
                       <div className="ap-card__user-row">
                         <div>
-                          <div className="ap-card__username" id={`pickup-name-${p._id}`}>
-                            {p.user?.name ?? "Unknown"}
-                          </div>
+                          <div className="ap-card__username" id={`pickup-name-${p._id}`}>{p.user?.name ?? "Unknown"}</div>
                           <div className="ap-card__phone">{p.user?.phone ?? "No phone"}</div>
                         </div>
-                        <span className={statusClass(p.status)}>
-                          {String(p.status ?? "Pending")}
-                        </span>
+                        <span className={statusClass(String(p.status))}>{String(p.status ?? "Pending")}</span>
                       </div>
 
                       <div className="ap-card__fields">
@@ -207,73 +200,34 @@ export default function AssignedPickups(): JSX.Element {
                           <span className="ap-field__label">Quantity</span>
                           <span className="ap-field__value">{p.quantity} kg</span>
                         </div>
-                        {p.location && (
-                          <div className="ap-field">
-                            <span className="ap-field__label">Location</span>
-                            <span className="ap-field__value">{p.location}</span>
-                          </div>
-                        )}
-                        {p.user?.address && (
-                          <div className="ap-field">
-                            <span className="ap-field__label">Address</span>
-                            <span className="ap-field__value">{p.user.address}</span>
-                          </div>
-                        )}
+                        {p.location && <div className="ap-field"><span className="ap-field__label">Location</span><span className="ap-field__value">{p.location}</span></div>}
+                        {p.user?.address && <div className="ap-field"><span className="ap-field__label">Address</span><span className="ap-field__value">{p.user.address}</span></div>}
                       </div>
 
-                      {p.image && (
-                        <img
-                          src={p.image}
-                          alt={`Preview of ${p.wasteType}`}
-                          className="ap-card__image"
-                          loading="lazy"
-                        />
-                      )}
+                      {p.image && <img src={p.image} alt={`Preview of ${p.wasteType}`} className="ap-card__image" loading="lazy" />}
                     </div>
 
-                    {/* ── Right: actions ── */}
                     <div className="ap-card__right">
-                      <div className="ap-card__time">
-                        {p.createdAt ? new Date(p.createdAt).toLocaleDateString() : ""}
-                      </div>
+                      <div className="ap-card__time">{p.createdAt ? new Date(p.createdAt).toLocaleDateString() : ""}</div>
 
-                      <a
-                        href={p.user?.phone ? `tel:${p.user.phone}` : "#"}
-                        onClick={(e) => { if (!p.user?.phone) { e.preventDefault(); alert("No phone number available"); } }}
-                        className="ap-btn ap-btn--call"
-                        aria-label={`Call ${p.user?.name ?? "user"}`}
-                      >
-                        📞 Call user
-                      </a>
+                      <a href={p.user?.phone ? `tel:${p.user.phone}` : "#"} onClick={(e) => { if (!p.user?.phone) { e.preventDefault(); alert("No phone number available"); } }} className="ap-btn ap-btn--call" aria-label={`Call ${p.user?.name ?? "user"}`}>📞 Call user</a>
 
-                      <button
-                        onClick={() => handleView(p._id)}
-                        className="ap-btn ap-btn--view"
-                      >
-                        View details
-                      </button>
+                      <button onClick={() => handleView(p._id)} className="ap-btn ap-btn--view">View details</button>
 
-                      {statusKey !== "picked" && statusKey !== "collected" && statusKey !== "completed" && (
-                        <button
-                          onClick={() => updatePickupStatus(p._id, "Picked")}
-                          disabled={!!updatingIds[p._id]}
-                          className="ap-btn ap-btn--picked"
-                        >
+                      {!awaitingApproval && statusKey !== "picked" && statusKey !== "collected" && statusKey !== "completed" && (
+                        <button onClick={() => updatePickupStatus(p._id, "Picked")} disabled={!!updatingIds[p._id]} className="ap-btn ap-btn--picked">
                           {updatingIds[p._id] ? "Updating…" : "Mark picked"}
                         </button>
                       )}
 
-                      {statusKey === "picked" && (
-                        <button
-                          onClick={() => updatePickupStatus(p._id, "Collected")}
-                          disabled={!!updatingIds[p._id]}
-                          className="ap-btn ap-btn--complete"
-                        >
+                      {!awaitingApproval && statusKey === "picked" && (
+                        <button onClick={() => updatePickupStatus(p._id, "Collected")} disabled={!!updatingIds[p._id]} className="ap-btn ap-btn--complete">
                           {updatingIds[p._id] ? "Updating…" : "✓ Mark completed"}
                         </button>
                       )}
-                    </div>
 
+                      {awaitingApproval && <div className="ap-awaiting">⏳ Awaiting admin approval</div>}
+                    </div>
                   </div>
                 </article>
               );
@@ -281,15 +235,9 @@ export default function AssignedPickups(): JSX.Element {
           </section>
         )}
 
-        {/* ── Footer ── */}
         <div className="ap-footer">
-          {page * PAGE_SIZE < pickups.length && (
-            <button className="ap-btn ap-btn--load" onClick={() => setPage((p) => p + 1)}>
-              Load more
-            </button>
-          )}
+          {page * PAGE_SIZE < activePickups.length && <button className="ap-btn ap-btn--load" onClick={() => setPage((p) => p + 1)}>Load more</button>}
         </div>
-
       </main>
     </div>
   );

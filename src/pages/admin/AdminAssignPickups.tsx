@@ -1,5 +1,5 @@
 // src/pages/admin/AdminAssignPickups.tsx
-import React, { useCallback, useEffect, useMemo, useState, type JSX } from "react";
+import { useCallback, useEffect, useMemo, useState, type JSX } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../api";
 import AdminSidebar from "../../components/AdminSidebar";

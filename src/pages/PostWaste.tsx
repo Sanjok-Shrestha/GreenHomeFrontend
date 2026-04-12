@@ -1,4 +1,3 @@
-// src/pages/PostWaste.tsx
 import React, { useEffect, useRef, useState, useContext } from "react";
 import type { AxiosProgressEvent } from "axios";
 import { useNavigate } from "react-router-dom";
@@ -135,7 +134,10 @@ export default function PostWaste(): React.JSX.Element {
       try {
         const res = await api.get("/pricing").catch(() => null);
         const data = res && res.data ? (Array.isArray(res.data) ? res.data : res.data.data ?? []) : [];
-        if (mounted) setPricing(data);
+        if (mounted) {
+          setPricing(data);
+          setPricingError(null);
+        }
       } catch (err: any) {
         console.error("Failed to load pricing", err);
         if (mounted) setPricingError("Failed to load price guide");
@@ -170,7 +172,8 @@ export default function PostWaste(): React.JSX.Element {
       return;
     }
     const p = pricing.find((x) => (x.wasteType || "").trim().toLowerCase() === wt);
-    const pricePerKg = p ? Number(p.pricePerKg || 0) : FALLBACK_PRICE_PER_KG[wt] ?? 0;
+    // server might return pricePerKg or price_per_kg
+    const pricePerKg = p ? Number((p as any).pricePerKg || (p as any).price_per_kg || 0) : FALLBACK_PRICE_PER_KG[wt] ?? 0;
     if (!pricePerKg) {
       setEstimatedPrice(null);
       return;
@@ -269,6 +272,54 @@ export default function PostWaste(): React.JSX.Element {
     return null;
   }
 
+  // Helper: try extract id from response object or headers
+  async function resolveCreatedIdFromResponse(res: any) {
+    if (!res) return null;
+    const candidates = [
+      res?.data?.createdId,
+      res?.data?.waste?._id,
+      res?.data?.waste?.id,
+      res?.data?._id,
+      res?.data?.id,
+      res?.data?.data?.waste?._id,
+      res?.data?.data?._id,
+      res?.data?.data?.id,
+    ];
+    for (const c of candidates) {
+      if (c) return String(c);
+    }
+    // try Location header
+    try {
+      const loc = res?.headers?.location;
+      if (typeof loc === "string") {
+        const parts = loc.split("/").filter(Boolean);
+        const last = parts[parts.length - 1];
+        if (last) return last;
+      }
+    } catch {}
+    return null;
+  }
+
+  // Final fallback: fetch my-posts and pick most recent
+  async function findMostRecentMyPostId() {
+    try {
+      const r = await api.get("/waste/my-posts").catch(() => null);
+      const payload = r?.data?.data ?? r?.data ?? r;
+      const arr = Array.isArray(payload) ? payload : (Array.isArray(r?.data) ? r.data : []);
+      if (!arr || arr.length === 0) return null;
+      let best = arr[0];
+      for (const it of arr) {
+        const a = it.createdAt ? new Date(it.createdAt).getTime() : 0;
+        const b = best.createdAt ? new Date(best.createdAt).getTime() : 0;
+        if (a > b) best = it;
+      }
+      return (best._id ?? best.id ?? null) as string | null;
+    } catch (e) {
+      console.warn("findMostRecentMyPostId failed", e);
+      return null;
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -315,22 +366,41 @@ export default function PostWaste(): React.JSX.Element {
         },
       });
 
-      const estimated = res?.data?.estimatedPrice;
+      console.debug("[PostWaste] POST response:", res);
+
+      const estimated = res?.data?.estimatedPrice ?? res?.data?.estimated_price;
       setEstimatedPrice(typeof estimated === "number" ? estimated : estimatedPrice);
       setSuccess(true);
 
-      const createdId =
-        res?.data?.waste?._id ??
-        res?.data?.waste?.id ??
-        res?.data?._id ??
-        res?.data?.id ??
-        null;
-
-      if (createdId) {
-        navigate(`/pickups?created=${createdId}`);
-      } else {
-        navigate("/pickups");
+      // Try resolving id
+      let createdId = await resolveCreatedIdFromResponse(res);
+      if (!createdId) {
+        console.debug("[PostWaste] createdId not found in POST response, trying /waste/my-posts fallback");
+        createdId = await findMostRecentMyPostId();
       }
+
+      console.debug("[PostWaste] resolved createdId:", createdId);
+
+      const goToSchedule = (id?: string | null) => {
+        const url = id ? `/schedule-pickup?item=${encodeURIComponent(id)}` : "/schedule-pickup";
+        // Try SPA navigation first
+        try {
+          if (id) navigate(url, { state: { createdId: id } });
+          else navigate(url);
+        } catch (navErr) {
+          console.warn("[PostWaste] navigate error:", navErr);
+        }
+        // Force full navigation quickly if SPA didn't switch
+        setTimeout(() => {
+          if (!window.location.pathname.startsWith("/schedule-pickup")) {
+            console.warn("[PostWaste] SPA navigation didn't change location — forcing full navigation to", url);
+            window.location.href = url;
+          }
+        }, 300);
+      };
+
+      if (createdId) goToSchedule(createdId);
+      else goToSchedule(null);
 
       setTimeout(() => {
         setFormData({ wasteType: "", quantity: "", location: "", description: "" });
@@ -345,6 +415,7 @@ export default function PostWaste(): React.JSX.Element {
         setMarkerPos(null);
       }, 1500);
     } catch (err: any) {
+      console.error("[PostWaste] submit error:", err);
       const status = err?.response?.status;
       const message = err?.response?.data?.message || err.message || "Failed to post waste.";
 
@@ -359,7 +430,7 @@ export default function PostWaste(): React.JSX.Element {
       } else if (status === 403) {
         setError(message || "You don't have permission to post waste.");
       } else if (status === 400) {
-        setError(message || "Bad request �� please check the fields.");
+        setError(message || "Bad request — please check the fields.");
       } else {
         setError(message);
       }
@@ -374,21 +445,7 @@ export default function PostWaste(): React.JSX.Element {
     setImageFile(null);
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("user");
-    setAuthState({ isAuth: false, roleState: "" });
-    navigate("/login", { replace: true });
-  };
-
-  function getPricePerKgForType(typeValue: string): number | null {
-    const t = (typeValue || "").trim().toLowerCase();
-    if (!t) return null;
-    const p = pricing.find((x) => (x.wasteType || "").trim().toLowerCase() === t);
-    if (p && typeof p.pricePerKg === "number") return Number(p.pricePerKg);
-    const fallback = FALLBACK_PRICE_PER_KG[t];
-    return typeof fallback === "number" ? fallback : null;
-  }
+  const getTodayLocal = () => new Date().toISOString().split("T")[0];
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "#f5f7fb" }}>
@@ -504,6 +561,14 @@ export default function PostWaste(): React.JSX.Element {
           <div style={{ background: "white", padding: 20, borderRadius: 12, boxShadow: "0 2px 12px rgba(0,0,0,0.08)" }}>
             <div style={{ background: "#f8f9fa", padding: 16, borderRadius: 10, marginBottom: 18 }}>
               <h4 style={{ marginTop: 0, fontSize: 15, color: "#2c3e50", fontWeight: 600 }}>Price Guide (per kg)</h4>
+
+              {/* Show pricingError if present */}
+              {pricingError && (
+                <div style={{ background: "#fff4f4", color: "#b91c1c", padding: 8, borderRadius: 6, marginBottom: 10, fontSize: 13 }}>
+                  {pricingError}
+                </div>
+              )}
+
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {pricingLoading ? <div style={{ color: "#666" }}>Loading price guide…</div> :
                   (pricing.length === 0 ? Object.keys(FALLBACK_PRICE_PER_KG).map((k) => (<div key={k} style={{ display: "flex", justifyContent: "space-between" }}><span>{k.charAt(0).toUpperCase() + k.slice(1)}</span><span style={{ fontWeight: 600, color: "#27ae60" }}>Rs {FALLBACK_PRICE_PER_KG[k]}</span></div>)) :
@@ -527,4 +592,15 @@ export default function PostWaste(): React.JSX.Element {
       </div>
     </div>
   );
+}
+
+/* helpers */
+function formatLocal(iso?: string | null) {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString();
+  } catch {
+    return iso ?? "";
+  }
 }

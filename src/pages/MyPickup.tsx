@@ -1,5 +1,6 @@
+// src/pages/MyPickups.tsx
 import React, { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import api from "../api";
 import Sidebar from "../components/Sidebar";
 
@@ -12,11 +13,11 @@ type Waste = {
   pickupDate?: string | null;
   imageUrl?: string;
   createdAt?: string;
+  completedAt?: string | null;
   [k: string]: any;
 };
 
 export default function MyPickups(): React.JSX.Element {
-  const navigate = useNavigate();
   const [items, setItems] = useState<Waste[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -24,249 +25,244 @@ export default function MyPickups(): React.JSX.Element {
   const [dateValue, setDateValue] = useState<string>("");
 
   const fetchItems = async () => {
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     try {
       const res = await api.get("/waste/my-posts");
-      const data = res.data?.data ?? res.data;
+      const data = res.data?.data ?? res.data ?? [];
       setItems(Array.isArray(data) ? data : []);
     } catch (err: any) {
-      console.error("Failed to load my pickups", err);
       setError(err?.response?.data?.message || "Failed to load");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchItems();
-  }, []);
+  useEffect(() => { fetchItems(); }, []);
 
   const startSchedule = (id: string, current?: string | null) => {
     setEditingId(id);
     if (current) {
       const d = new Date(current);
-      const tzOffset = d.getTimezoneOffset() * 60000;
-      const localISO = new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
+      const localISO = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
       setDateValue(localISO);
     } else {
       setDateValue("");
     }
   };
 
-  const cancelEdit = () => {
-    setEditingId(null);
-    setDateValue("");
-  };
+  const cancelEdit = () => { setEditingId(null); setDateValue(""); };
 
   const saveSchedule = async (id: string) => {
-    if (!dateValue) {
-      alert("Please choose date/time");
-      return;
-    }
+    if (!dateValue) { alert("Please choose date/time"); return; }
     try {
-      await api.put(`/waste/schedule/${id}`, { pickupDate: dateValue });
+      await api.put(`/waste/schedule/${id}`, { pickupDate: new Date(dateValue).toISOString() });
       await fetchItems();
-      setEditingId(null);
-      setDateValue("");
-      showToast("Scheduled");
+      setEditingId(null); setDateValue("");
+      showToast("Scheduled ✓");
     } catch (err: any) {
-      console.error("Scheduling failed", err);
       alert(err?.response?.data?.message || "Failed to schedule");
       await fetchItems();
-      setEditingId(null);
-      setDateValue("");
+      setEditingId(null); setDateValue("");
     }
   };
 
-  const showToast = (text: string, ttl = 900) => {
+  const showToast = (text: string, ttl = 1200) => {
     const n = document.createElement("div");
     n.textContent = text;
     Object.assign(n.style, {
-      position: "fixed",
-      right: "12px",
-      bottom: "12px",
-      background: "#27ae60",
-      color: "#fff",
-      padding: "6px 10px",
-      borderRadius: "6px",
-      fontSize: "12px",
-      zIndex: 9999,
+      position: "fixed", right: "18px", bottom: "22px",
+      background: "#1a6b45", color: "#fff",
+      padding: "9px 14px", borderRadius: "9px",
+      fontSize: "13px", fontWeight: "500", zIndex: "9999",
+      boxShadow: "0 4px 16px rgba(26,107,69,0.25)",
     });
     document.body.appendChild(n);
-    setTimeout(() => {
-      try {
-        document.body.removeChild(n);
-      } catch {}
-    }, ttl);
+    setTimeout(() => { try { document.body.removeChild(n); } catch {} }, ttl);
   };
 
+  const visible = items.filter((w) => {
+    const s = (w.status ?? "").toString().toLowerCase();
+    return s === "pending" || s === "scheduled";
+  });
+
   return (
-    <div style={pageStyles.root}>
-      <Sidebar />
-      <main style={pageStyles.main}>
-        <header style={pageStyles.header}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 20 }}>Pickups Status</h2>
-            <div style={{ color: "#666", marginTop: 6, fontSize: 13 }}>
-              Manage your posted waste and schedule pickups
+    <>
+      <style>{css}</style>
+      <div className="mp-root">
+        <Sidebar />
+        <main className="mp-main">
+          <div className="mp-inner">
+
+            {/* Header */}
+            <div className="mp-header">
+              <div>
+                <h2 className="mp-title">Pickup Status</h2>
+                <p className="mp-sub">Manage your posted waste and schedule pickups</p>
+              </div>
+              <div className="mp-header__right">
+                <Link to="/post-waste" className="mp-btn mp-btn--primary">+ Post waste</Link>
+                <button onClick={fetchItems} className="mp-btn" disabled={loading}>
+                  {loading ? "Loading…" : "↻ Refresh"}
+                </button>
+                <Link to="/my-pickups/history" className="mp-link">View history →</Link>
+              </div>
             </div>
-          </div>
 
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <Link to="/post-waste" style={pageStyles.postButton}>
-              + Post waste
-            </Link>
-            <button onClick={() => fetchItems()} style={pageStyles.refreshButton}>
-              Refresh
-            </button>
-          </div>
-        </header>
+            {/* Loading */}
+            {loading && (
+              <div className="mp-list">
+                {[0,1,2,3].map(i => (
+                  <div key={i} className="mp-skeleton-card" style={{ animationDelay: `${i * 60}ms` }}>
+                    <div className="mp-skel" style={{ width: 52, height: 52, borderRadius: 10, flexShrink: 0 }} />
+                    <div style={{ flex: 1 }}>
+                      <div className="mp-skel" style={{ height: 13, width: "30%", marginBottom: 8 }} />
+                      <div className="mp-skel" style={{ height: 11, width: "50%", marginBottom: 8 }} />
+                      <div className="mp-skel" style={{ height: 28, width: "60%", borderRadius: 8 }} />
+                    </div>
+                    <div className="mp-skel" style={{ width: 52, height: 20, borderRadius: 6 }} />
+                  </div>
+                ))}
+              </div>
+            )}
 
-        {loading ? (
-          <div style={{ padding: 12, color: "#444" }}>Loading your pickups…</div>
-        ) : error ? (
-          <div style={{ padding: 12, color: "crimson" }}>Error: {error}</div>
-        ) : items.length === 0 ? (
-          <div style={{ padding: 12 }}>
-            <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-              <p style={{ margin: 0, fontSize: 14 }}>
-                No waste posts yet.{" "}
-                <Link to="/post-waste" style={pageStyles.postInline}>
-                  Post waste
+            {/* Error */}
+            {!loading && error && (
+              <div className="mp-error">
+                <span>⚠ {error}</span>
+                <button className="mp-btn mp-btn--primary" onClick={fetchItems}>Retry</button>
+              </div>
+            )}
+
+            {/* Empty */}
+            {!loading && !error && visible.length === 0 && (
+              <div className="mp-empty">
+                <div className="mp-empty__icon">📦</div>
+                <div className="mp-empty__title">No pending pickups</div>
+                <div className="mp-empty__sub">Posts you've made will appear here</div>
+                <Link to="/post-waste" className="mp-btn mp-btn--primary" style={{ marginTop: 8 }}>
+                  + Post waste
                 </Link>
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div style={{ padding: 12 }}>
-            <div style={{ maxWidth: 1100, margin: "0 auto", display: "flex", flexDirection: "column", gap: 8 }}>
-              {items.map((w) => (
-                <div key={w._id} style={cardConstrained}>
-                  <div style={{ width: 56, height: 44, flex: "0 0 56px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    {w.imageUrl ? (
-                      <Thumbnail imageUrl={w.imageUrl} size={{ w: 56, h: 44 }} />
-                    ) : (
-                      <div style={{ width: 56, height: 44, background: "#f1f1f1", borderRadius: 6 }} />
-                    )}
-                  </div>
+              </div>
+            )}
 
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                      <div style={{ overflow: "hidden" }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>
-                          {(w.wasteType ?? "Unknown").toString().toUpperCase()}
-                        </div>
-                        <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
-                          {w.quantity ?? "—"} kg • {w.createdAt ? new Date(w.createdAt).toLocaleString() : "—"}
-                        </div>
-                      </div>
+            {/* List */}
+            {!loading && !error && visible.length > 0 && (
+              <div className="mp-list">
+                {visible.map((w, idx) => (
+                  <div key={w._id} className="mp-card" style={{ animationDelay: `${Math.min(idx * 35, 280)}ms` }}>
 
-                      <div style={{ textAlign: "right", flex: "0 0 auto", marginLeft: 8 }}>
-                        <div style={{ fontSize: 13, fontWeight: 700 }}>Rs {w.price ?? "—"}</div>
-                        <div style={{ fontSize: 11, color: "#666", marginTop: 4 }}>{w.status ?? "—"}</div>
-                      </div>
+                    {/* Thumbnail */}
+                    <div className="mp-thumb">
+                      {w.imageUrl
+                        ? <Thumbnail imageUrl={w.imageUrl} />
+                        : <span className="mp-thumb__fallback">🗑️</span>
+                      }
                     </div>
 
-                    <div style={{ marginTop: 8, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                      <Link to={`/track/${w._id}`} style={linkTiny}>
-                        View
-                      </Link>
+                    {/* Meta */}
+                    <div className="mp-card__meta">
+                      <div className="mp-card__type">
+                        {(w.wasteType ?? "Unknown").toString()}
+                      </div>
+                      <div className="mp-card__details">
+                        <span className="mp-pill">{w.quantity ?? "—"} kg</span>
+                        <span className="mp-pill mp-pill--muted">
+                          {w.createdAt
+                            ? new Date(w.createdAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })
+                            : "—"}
+                        </span>
+                        <span className={`mp-badge mp-badge--${(w.status ?? "pending").toLowerCase()}`}>
+                          {w.status ?? "pending"}
+                        </span>
+                      </div>
 
-                      {editingId === w._id ? (
-                        <>
-                          <input type="datetime-local" value={dateValue} onChange={(e) => setDateValue(e.target.value)} style={inputTiny} />
-                          <button onClick={() => saveSchedule(w._id)} style={buttonTinyPrimary}>
-                            Save
-                          </button>
-                          <button onClick={cancelEdit} style={buttonTiny}>
-                            Cancel
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button onClick={() => startSchedule(w._id, w.pickupDate ?? null)} style={buttonTiny}>
-                            Schedule
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              const link = window.location.origin + `/track/${w._id}`;
-                              navigator.clipboard?.writeText(link);
-                              showToast("Copied");
-                            }}
-                            style={buttonTiny}
-                          >
-                            Copy
-                          </button>
-
-                          <Link to="/post-waste" style={buttonTinyLink}>
-                            Post similar
-                          </Link>
-                        </>
+                      {w.pickupDate && (
+                        <div className="mp-scheduled">
+                          📅 Scheduled: {new Date(w.pickupDate).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        </div>
                       )}
+
+                      {/* Actions */}
+                      <div className="mp-card__actions">
+                        <Link to={`/track/${w._id}`} className="mp-action-btn">View</Link>
+
+                        {editingId === w._id ? (
+                          <>
+                            <input
+                              type="datetime-local"
+                              value={dateValue}
+                              onChange={e => setDateValue(e.target.value)}
+                              className="mp-date-input"
+                            />
+                            <button onClick={() => saveSchedule(w._id)} className="mp-action-btn mp-action-btn--save">
+                              Save
+                            </button>
+                            <button onClick={cancelEdit} className="mp-action-btn">
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => startSchedule(w._id, w.pickupDate ?? null)}
+                              className="mp-action-btn"
+                            >
+                              {w.pickupDate ? "Reschedule" : "Schedule"}
+                            </button>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard?.writeText(window.location.origin + `/track/${w._id}`);
+                                showToast("Link copied");
+                              }}
+                              className="mp-action-btn"
+                            >
+                              Copy link
+                            </button>
+                            <Link to="/post-waste" className="mp-action-btn mp-action-btn--ghost">
+                              Post similar
+                            </Link>
+                          </>
+                        )}
+                      </div>
                     </div>
+
+                    {/* Price */}
+                    <div className="mp-card__right">
+                      <div className="mp-price">Rs {w.price != null ? Number(w.price).toLocaleString() : "—"}</div>
+                    </div>
+
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
+
           </div>
-        )}
-      </main>
-    </div>
+        </main>
+      </div>
+    </>
   );
 }
 
-/* ------------------- Thumbnail (defensive, avoids duplicate prefixes) ------------------- */
-function Thumbnail({ imageUrl, size = { w: 56, h: 44 } }: { imageUrl?: string | null; size?: { w: number; h: number } }) {
+/* ── Thumbnail ── */
+function Thumbnail({ imageUrl }: { imageUrl?: string | null }) {
   const [src, setSrc] = useState<string | null>(null);
-  const [error, setError] = useState(false);
+  const [err, setErr] = useState(false);
 
   useEffect(() => {
     if (!imageUrl) return;
     let mounted = true;
     let objectUrl: string | null = null;
-
-    // Get axios baseURL (likely "http://localhost:5000/api")
-    const apiBase = (api.defaults && (api.defaults.baseURL as string)) || "";
-    let apiBaseOrigin = "";
-    let apiBasePath = "";
-    try {
-      if (apiBase && /^https?:\/\//i.test(apiBase)) {
-        const u = new URL(apiBase);
-        apiBaseOrigin = u.origin; // e.g. "http://localhost:5000"
-        apiBasePath = u.pathname.replace(/\/+$/, ""); // e.g. "/api" or ""
-      } else {
-        apiBaseOrigin = window.location.origin;
-        apiBasePath = apiBase ? apiBase.replace(/\/+$/, "") : "";
-      }
-    } catch {
-      apiBaseOrigin = window.location.origin;
-      apiBasePath = "";
-    }
-
-    const origin = window.location.origin;
+    const apiBase = (api.defaults?.baseURL as string) || "";
     const raw = String(imageUrl).trim();
-
-    // Build candidates (ordered, safe, no blind concatenation)
     const candidates: string[] = [];
 
     if (/^https?:\/\//i.test(raw)) {
       candidates.push(raw);
     } else {
       const path = raw.startsWith("/") ? raw : "/" + raw;
-      if (apiBasePath && path.startsWith(apiBasePath)) {
-        // path already contains the api prefix (e.g. "/api/uploads/...")
-        candidates.push(path);
-      } else {
-        if (apiBase) candidates.push(apiBase + path); // absolute
-        if (apiBase) candidates.push(apiBase.replace(/\/api$/, "") + path); // try host without /api
-        candidates.push(path); // relative
-      }
-
-      // try common upload locations based on filename
-      const parts = path.split("/");
-      const filename = parts[parts.length - 1] || "";
+      if (apiBase) candidates.push(apiBase + path);
+      candidates.push(path);
+      const filename = path.split("/").pop() || "";
       if (filename) {
         candidates.push(`/uploads/${filename}`);
         candidates.push(`/uploads/images/${filename}`);
@@ -274,217 +270,383 @@ function Thumbnail({ imageUrl, size = { w: 56, h: 44 } }: { imageUrl?: string | 
       }
     }
 
-    // dedupe & normalize multiple slashes for keying (preserve original candidate strings)
-    const uniq: string[] = [];
     const seen = new Set<string>();
-    for (const c of candidates) {
-      const key = c.replace(/\/+/g, "/");
-      if (!seen.has(key)) {
-        seen.add(key);
-        uniq.push(c);
-      }
-    }
-
-    console.debug("[Thumbnail] candidates for", imageUrl, uniq);
-
-    // Convert a candidate into a path usable with api.get (removes apiBasePath so axios won't double prefix)
-    function pathForApi(candidate: string): string | null {
-      try {
-        if (/^https?:\/\//i.test(candidate)) {
-          const u = new URL(candidate);
-          if (u.origin === apiBaseOrigin) {
-            let p = u.pathname + (u.search || "");
-            if (apiBasePath && p.startsWith(apiBasePath)) p = p.slice(apiBasePath.length) || "/";
-            if (!p.startsWith("/")) p = "/" + p;
-            return p;
-          }
-          // cross-origin absolute -> cannot use api.get
-          return null;
-        } else {
-          let p = candidate.startsWith("/") ? candidate : "/" + candidate;
-          if (apiBasePath && p.startsWith(apiBasePath)) {
-            p = p.slice(apiBasePath.length) || "/";
-          }
-          if (!p.startsWith("/")) p = "/" + p;
-          return p;
-        }
-      } catch {
-        return null;
-      }
-    }
+    const uniq = candidates.filter(c => {
+      const k = c.replace(/\/+/g, "/");
+      return seen.has(k) ? false : (seen.add(k), true);
+    });
 
     async function tryCandidates() {
       for (const cand of uniq) {
         if (!mounted) return;
         try {
           if (/^https?:\/\//i.test(cand)) {
+            let apiOrigin = window.location.origin;
+            try { if (typeof api.defaults.baseURL === "string") apiOrigin = new URL(api.defaults.baseURL).origin; } catch {}
             const candUrl = new URL(cand);
-            let apiOrigin = origin;
-            try {
-              if (api.defaults && typeof api.defaults.baseURL === "string") apiOrigin = new URL(api.defaults.baseURL).origin;
-              else if (apiBase) apiOrigin = new URL(apiBase).origin;
-            } catch {}
             if (candUrl.origin === apiOrigin) {
-              const p = pathForApi(cand);
-              if (!p) continue;
-              try {
-                const resp = await api.get(p, { responseType: "blob" });
-                objectUrl = URL.createObjectURL(resp.data);
-                if (mounted) {
-                  setSrc(objectUrl);
-                  console.debug("[Thumbnail] loaded blob (same-origin absolute) from", cand);
-                  return;
-                }
-              } catch (err) {
-                console.debug("[Thumbnail] api.get for same-origin absolute failed", cand, err);
-                continue;
-              }
+              const resp = await api.get(candUrl.pathname + (candUrl.search || ""), { responseType: "blob" });
+              objectUrl = URL.createObjectURL(resp.data);
+              if (mounted) { setSrc(objectUrl); return; }
             } else {
-              if (mounted) {
-                setSrc(cand);
-                console.debug("[Thumbnail] using external absolute URL", cand);
-                return;
-              }
+              if (mounted) { setSrc(cand); return; }
             }
           } else {
-            const p = pathForApi(cand);
-            if (p === null) {
-              continue;
-            }
-            try {
-              const resp = await api.get(p, { responseType: "blob" });
-              objectUrl = URL.createObjectURL(resp.data);
-              if (mounted) {
-                setSrc(objectUrl);
-                console.debug("[Thumbnail] fetched blob for candidate", cand, "via api.get", p);
-                return;
-              }
-            } catch (err) {
-              console.debug("[Thumbnail] relative candidate failed", cand, err);
-              continue;
-            }
+            const resp = await api.get(cand.startsWith("/") ? cand : "/" + cand, { responseType: "blob" });
+            objectUrl = URL.createObjectURL(resp.data);
+            if (mounted) { setSrc(objectUrl); return; }
           }
-        } catch (outerErr) {
-          console.debug("[Thumbnail] candidate outer error", cand, outerErr);
-          continue;
-        }
+        } catch { continue; }
       }
-
-      if (mounted) {
-        setError(true);
-        console.debug("[Thumbnail] all candidates failed for", imageUrl);
-      }
+      if (mounted) setErr(true);
     }
 
     tryCandidates();
-
-    return () => {
-      mounted = false;
-      if (objectUrl) {
-        try {
-          URL.revokeObjectURL(objectUrl);
-        } catch {}
-      }
-    };
+    return () => { mounted = false; if (objectUrl) try { URL.revokeObjectURL(objectUrl); } catch {} };
   }, [imageUrl]);
 
-  if (error || !src) {
-    return (
-      <div
-        style={{
-          width: size.w,
-          height: size.h,
-          background: "#f1f1f1",
-          borderRadius: 6,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "#869089",
-          fontSize: 12,
-        }}
-      >
-        {error ? "Image unavailable" : "No image"}
-      </div>
-    );
-  }
-
-  return <img src={src} alt="thumb" style={{ width: size.w, height: size.h, objectFit: "cover", borderRadius: 6 }} onError={() => setError(true)} />;
+  if (err || !src) return <span className="mp-thumb__fallback">🗑️</span>;
+  return <img src={src} alt="waste" className="mp-thumb__img" onError={() => setErr(true)} />;
 }
 
-/* ------------------- Styles & helpers ------------------- */
-const cardConstrained: React.CSSProperties = {
-  display: "flex",
-  gap: 12,
-  alignItems: "flex-start",
-  background: "#fff",
-  padding: "10px 12px",
-  borderRadius: 8,
-  boxShadow: "0 1px 6px rgba(0,0,0,0.04)",
-  fontSize: 13,
-  width: "100%",
-  maxWidth: "100%",
-};
+/* ── CSS ── */
+const css = `
+  .mp-root {
+    display: flex;
+    min-height: 100vh;
+    background: #f4faf6;
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
 
-const linkTiny: React.CSSProperties = {
-  padding: "6px 8px",
-  borderRadius: 6,
-  background: "#f0f0f0",
-  color: "#111",
-  textDecoration: "none",
-  fontSize: 12,
-  display: "inline-block",
-};
+  .mp-main {
+    flex: 1;
+    min-width: 0;
+    padding: 32px 28px;
+    box-sizing: border-box;
+  }
 
-const buttonTiny: React.CSSProperties = {
-  padding: "6px 8px",
-  borderRadius: 6,
-  border: "none",
-  background: "#f0f0f0",
-  cursor: "pointer",
-  fontSize: 12,
-};
+  .mp-inner {
+    max-width: 860px;
+    margin: 0 auto;
+  }
 
-const buttonTinyPrimary: React.CSSProperties = {
-  padding: "6px 8px",
-  borderRadius: 6,
-  border: "none",
-  background: "#0b6efd",
-  color: "#fff",
-  cursor: "pointer",
-  fontSize: 12,
-};
+  /* ── Header ── */
+  .mp-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
 
-const inputTiny: React.CSSProperties = {
-  padding: "6px 8px",
-  borderRadius: 6,
-  border: "1px solid #ddd",
-  fontSize: 12,
-};
+  .mp-title {
+    font-size: 20px;
+    font-weight: 500;
+    color: #0f1f16;
+    letter-spacing: -0.3px;
+    margin: 0 0 4px;
+  }
 
-const buttonTinyLink: React.CSSProperties = {
-  padding: "6px 8px",
-  borderRadius: 6,
-  background: "transparent",
-  color: "#0b6efd",
-  textDecoration: "none",
-  border: "1px dashed #dfefff",
-  fontSize: 12,
-};
+  .mp-sub {
+    font-size: 13.5px;
+    color: #6b7f73;
+    margin: 0;
+  }
 
-const pageStyles: { [k: string]: React.CSSProperties } = {
-  root: { display: "flex", minHeight: "100vh", fontFamily: "Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial", background: "#f5f7fb" },
-  sidebar: { width: 240, background: "linear-gradient(180deg,#16382f,#123023)", color: "#fff", display: "flex", flexDirection: "column", padding: 18, boxShadow: "2px 0 12px rgba(0,0,0,0.06)" },
-  brand: { display: "flex", alignItems: "center", gap: 10, marginBottom: 12 },
-  brandIcon: { fontSize: 20 },
-  brandText: { fontWeight: 800, fontSize: 18 },
-  nav: { display: "flex", flexDirection: "column", gap: 8 },
-  navButton: { background: "transparent", border: "none", color: "#e6eef0", padding: "10px 8px", textAlign: "left", borderRadius: 8, cursor: "pointer", fontWeight: 700 },
-  navButtonActive: { background: "rgba(255,255,255,0.06)", color: "#fff" },
-  logoutButton: { width: "100%", padding: "10px 12px", borderRadius: 8, border: "none", background: "#c0392b", color: "#fff", cursor: "pointer", fontWeight: 700 },
+  .mp-header__right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
 
-  main: { flex: 1, padding: 18 },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
-  postButton: { padding: "8px 12px", borderRadius: 8, background: "#19fd0d", color: "#063", textDecoration: "none", fontWeight: 800 },
-  refreshButton: { padding: "8px 12px", borderRadius: 8, background: "#eef6ff", border: "none", cursor: "pointer" },
-  postInline: { padding: "6px 8px", borderRadius: 6, background: "#19fd0d", color: "#fff", textDecoration: "none", fontWeight: 700 },
-};
+  .mp-link {
+    font-size: 13px;
+    font-weight: 500;
+    color: #1a6b45;
+    text-decoration: none;
+    padding: 4px 2px;
+    transition: color 0.12s;
+  }
+  .mp-link:hover { color: #0f4a2e; }
+
+  /* ── Buttons ── */
+  .mp-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    border: 1px solid #dde8e2;
+    background: #ffffff;
+    color: #2a3d31;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    font-family: inherit;
+    text-decoration: none;
+    transition: background 0.12s, border-color 0.12s;
+    line-height: 1;
+  }
+  .mp-btn:hover:not(:disabled) { background: #f0f7f3; border-color: #c4d9cc; }
+  .mp-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+  .mp-btn--primary {
+    background: #2c9e6a;
+    border-color: #2c9e6a;
+    color: #fff;
+  }
+  .mp-btn--primary:hover:not(:disabled) { background: #249060; border-color: #249060; }
+
+  /* ── List ── */
+  .mp-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* ── Card ── */
+  .mp-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    background: #ffffff;
+    border: 1px solid #dde8e2;
+    border-radius: 12px;
+    padding: 14px 16px;
+    box-sizing: border-box;
+    animation: mp-fade-in 0.22s ease both;
+    transition: border-color 0.15s;
+  }
+  .mp-card:hover { border-color: #b8d4c4; }
+
+  /* ── Thumbnail ── */
+  .mp-thumb {
+    width: 52px;
+    height: 52px;
+    border-radius: 10px;
+    background: #f0f7f3;
+    border: 1px solid #dde8e2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    overflow: hidden;
+    margin-top: 2px;
+  }
+  .mp-thumb__img {
+    width: 100%; height: 100%;
+    object-fit: cover; border-radius: 9px; display: block;
+  }
+  .mp-thumb__fallback { font-size: 20px; line-height: 1; }
+
+  /* ── Card meta ── */
+  .mp-card__meta {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .mp-card__type {
+    font-size: 14px;
+    font-weight: 500;
+    color: #0f1f16;
+    text-transform: capitalize;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+  }
+
+  .mp-card__details {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+  }
+
+  /* ── Pills ── */
+  .mp-pill {
+    font-size: 11.5px;
+    color: #4a6b56;
+    background: #f0f7f3;
+    border: 1px solid #dde8e2;
+    border-radius: 20px;
+    padding: 2px 8px;
+    white-space: nowrap;
+    line-height: 1.5;
+  }
+  .mp-pill--muted { background: #f5f8f6; color: #5a7364; }
+
+  /* ── Badge ── */
+  .mp-badge {
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: capitalize;
+    letter-spacing: 0.3px;
+    padding: 2px 9px;
+    border-radius: 20px;
+    white-space: nowrap;
+    line-height: 1.5;
+    border: 1px solid;
+  }
+  .mp-badge--pending  { background: #fef9ec; color: #92610a; border-color: #fde9a2; }
+  .mp-badge--scheduled { background: #e6f4ec; color: #1a6b45; border-color: #c3e0d0; }
+
+  /* ── Scheduled date ── */
+  .mp-scheduled {
+    font-size: 12px;
+    color: #1a6b45;
+    font-weight: 500;
+    background: #f0f9f4;
+    border: 1px solid #c3e0d0;
+    border-radius: 7px;
+    padding: 5px 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    width: fit-content;
+  }
+
+  /* ── Action row ── */
+  .mp-card__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .mp-action-btn {
+    padding: 5px 11px;
+    border-radius: 7px;
+    border: 1px solid #dde8e2;
+    background: #f7fbf8;
+    color: #2a3d31;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .mp-action-btn:hover { background: #eaf4ef; border-color: #c4d9cc; color: #1a6b45; }
+
+  .mp-action-btn--save {
+    background: #2c9e6a;
+    border-color: #2c9e6a;
+    color: #fff;
+  }
+  .mp-action-btn--save:hover { background: #249060; border-color: #249060; color: #fff; }
+
+  .mp-action-btn--ghost {
+    background: transparent;
+    border-style: dashed;
+    color: #3d7a52;
+  }
+  .mp-action-btn--ghost:hover { background: #f0f7f3; border-style: solid; }
+
+  /* ── Date input ── */
+  .mp-date-input {
+    padding: 5px 9px;
+    border-radius: 7px;
+    border: 1px solid #dde8e2;
+    background: #f7fbf8;
+    font-size: 12px;
+    font-family: inherit;
+    color: #111;
+    outline: none;
+    transition: border-color 0.14s, box-shadow 0.14s;
+  }
+  .mp-date-input:focus {
+    border-color: #2c9e6a;
+    box-shadow: 0 0 0 3px rgba(44,158,106,0.1);
+  }
+
+  /* ── Price ── */
+  .mp-card__right {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    padding-top: 2px;
+  }
+  .mp-price {
+    font-size: 14px;
+    font-weight: 500;
+    color: #0f1f16;
+    white-space: nowrap;
+  }
+
+  /* ── Error ── */
+  .mp-error {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #fff8f7;
+    border: 1px solid #f5c4b3;
+    border-radius: 12px;
+    padding: 14px 18px;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: #712b13;
+    flex-wrap: wrap;
+  }
+
+  /* ── Empty ── */
+  .mp-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 64px 24px;
+    gap: 8px;
+    text-align: center;
+  }
+  .mp-empty__icon { font-size: 34px; margin-bottom: 4px; line-height: 1; }
+  .mp-empty__title { font-size: 15px; font-weight: 500; color: #1a3326; }
+  .mp-empty__sub { font-size: 13px; color: #6b7f73; }
+
+  /* ── Skeleton ── */
+  .mp-skeleton-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: #ffffff;
+    border: 1px solid #dde8e2;
+    border-radius: 12px;
+    padding: 14px 16px;
+    animation: mp-fade-in 0.2s ease both;
+  }
+  .mp-skel {
+    background: linear-gradient(90deg, #edf3ef 25%, #e0ece5 50%, #edf3ef 75%);
+    background-size: 200% 100%;
+    border-radius: 6px;
+    animation: mp-shimmer 1.4s infinite;
+    flex-shrink: 0;
+  }
+
+  /* ── Animations ── */
+  @keyframes mp-fade-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes mp-shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 560px) {
+    .mp-main { padding: 20px 16px; }
+    .mp-card { flex-wrap: wrap; }
+    .mp-card__right { width: 100%; flex-direction: row; justify-content: flex-end; }
+    .mp-header { flex-direction: column; gap: 10px; }
+    .mp-header__right { width: 100%; }
+  }
+`;
