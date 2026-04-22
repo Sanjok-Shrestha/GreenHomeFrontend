@@ -1,3 +1,4 @@
+// src/pages/AssignedPickups.tsx
 import { useCallback, useEffect, useMemo, useState, type JSX } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api";
@@ -5,11 +6,20 @@ import CollectorSidebar from "../components/CollectorSidebar";
 import "./AssignedPickups.css";
 
 /* ── Types ── */
-type UserRef = { _id?: string; name?: string; phone?: string; address?: string; email?: string; };
+type AddressObject = {
+  line1?: string;
+  line2?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  country?: string;
+  [k: string]: any;
+};
+type UserRef = { _id?: string; name?: string; phone?: string; address?: string | AddressObject; email?: string; };
 type PickupStatus = "Pending" | "Scheduled" | "Picked" | "CollectedPending" | "Collected" | "Completed" | string;
 type Pickup = {
   _id: string; user: UserRef; wasteType: string; quantity: number;
-  status: PickupStatus; image?: string | null; createdAt?: string; location?: string;
+  status: PickupStatus; image?: string | null; createdAt?: string; location?: string | AddressObject;
 };
 
 const PAGE_SIZE = 10;
@@ -22,6 +32,77 @@ function statusClass(status: string) {
   return "ap-status ap-status--pending";
 }
 
+/* ── Small inline SVG icons (no external deps) ── */
+const smallIconStyle: React.CSSProperties = { width: 16, height: 16, display: "inline-block", verticalAlign: "middle", marginRight: 8, flexShrink: 0 };
+
+const RefreshIcon: React.FC<{ spin?: boolean }> = ({ spin }) => (
+  <svg style={{ ...smallIconStyle, transform: spin ? "rotate(90deg)" : undefined }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M20 12a8 8 0 1 0-2.3 5.3" />
+    <polyline points="20 12 20 6 14 6" />
+  </svg>
+);
+
+const WarningIcon: React.FC = () => (
+  <svg style={smallIconStyle} viewBox="0 0 24 24" fill="none" stroke="#b91c1c" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+    <line x1="12" y1="9" x2="12" y2="13" />
+    <line x1="12" y1="17" x2="12" y2="17" />
+  </svg>
+);
+
+const PhoneIcon: React.FC = () => (
+  <svg style={smallIconStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.86 19.86 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.86 19.86 0 0 1 3.08 4.18 2 2 0 0 1 5 2h3a2 2 0 0 1 2 1.72c.12.9.37 1.77.73 2.6a2 2 0 0 1-.45 2.11L9.91 9.91a16 16 0 0 0 6 6l1.48-1.48a2 2 0 0 1 2.11-.45c.83.36 1.7.61 2.6.73A2 2 0 0 1 22 16.92z" />
+  </svg>
+);
+
+const HourglassIcon: React.FC = () => (
+  <svg style={smallIconStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M6 2h12" />
+    <path d="M6 22h12" />
+    <path d="M8 6h8v2.5a4 4 0 0 1-1.17 2.83L12 14l-2.83-2.67A4 4 0 0 1 8 8.5V6z" />
+  </svg>
+);
+
+const PickupIcon: React.FC = () => (
+  <svg style={smallIconStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <rect x="1" y="3" width="15" height="13" rx="2" />
+    <path d="M16 8h5l2 4v5" />
+    <circle cx="5.5" cy="19.5" r="1.5" />
+    <circle cx="18.5" cy="19.5" r="1.5" />
+  </svg>
+);
+
+const CheckIcon: React.FC = () => (
+  <svg style={smallIconStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M20 6L9 17l-5-5" />
+  </svg>
+);
+
+const SpinnerIcon: React.FC = () => (
+  <svg style={{ width: 16, height: 16, marginRight: 8 }} viewBox="0 0 50 50" aria-hidden>
+    <circle cx="25" cy="25" r="20" fill="none" stroke="#2c9e6a" strokeWidth="4" strokeDasharray="80" strokeLinecap="round" />
+  </svg>
+);
+
+/* ── Helper: render address/location safely as text ── */
+function formatAddress(a?: string | AddressObject | null): string {
+  if (!a) return "";
+  if (typeof a === "string") return a;
+  const parts: string[] = [];
+  const tryPush = (v?: string | null) => { if (v && String(v).trim()) parts.push(String(v).trim()); };
+  tryPush(a.line1); tryPush(a.line2);
+  // combine city/state/postal
+  const cityParts: string[] = [];
+  if (a.city) cityParts.push(a.city);
+  if (a.state) cityParts.push(a.state);
+  if (a.postalCode) cityParts.push(a.postalCode);
+  if (cityParts.length) parts.push(cityParts.join(", "));
+  tryPush(a.country);
+  return parts.join(", ");
+}
+
+/* ─────────────────────────── Component ─────────────────────────── */
 export default function AssignedPickups(): JSX.Element {
   const navigate = useNavigate();
 
@@ -164,14 +245,22 @@ export default function AssignedPickups(): JSX.Element {
           </div>
           <div className="collector-header__right">
             <span className="collector-count">{activePickups.length} assigned</span>
-            <button className="ap-btn ap-btn--primary" onClick={() => fetchAssigned()} disabled={loading}>
-              {loading ? "Refreshing…" : "↻ Refresh"}
+            <button className="ap-btn ap-btn--primary" onClick={() => fetchAssigned()} disabled={loading} aria-label="Refresh pickups">
+              <RefreshIcon spin={loading} />
+              {loading ? "Refreshing…" : "Refresh"}
             </button>
           </div>
         </header>
 
         {toast && <div className="ap-toast" role="status" aria-live="polite">{toast}</div>}
-        {error && <div className="ap-error">⚠ {error}</div>}
+
+        {error && (
+          <div className="ap-error" role="alert">
+            <WarningIcon />
+            <span>{error}</span>
+          </div>
+        )}
+
         {!error && activePickups.length === 0 && <div className="ap-empty">No pickups assigned to you yet.</div>}
 
         {!error && activePickups.length > 0 && (
@@ -200,8 +289,18 @@ export default function AssignedPickups(): JSX.Element {
                           <span className="ap-field__label">Quantity</span>
                           <span className="ap-field__value">{p.quantity} kg</span>
                         </div>
-                        {p.location && <div className="ap-field"><span className="ap-field__label">Location</span><span className="ap-field__value">{p.location}</span></div>}
-                        {p.user?.address && <div className="ap-field"><span className="ap-field__label">Address</span><span className="ap-field__value">{p.user.address}</span></div>}
+                        {p.location && (
+                          <div className="ap-field">
+                            <span className="ap-field__label">Location</span>
+                            <span className="ap-field__value">{typeof p.location === "string" ? p.location : formatAddress(p.location)}</span>
+                          </div>
+                        )}
+                        {p.user?.address && (
+                          <div className="ap-field">
+                            <span className="ap-field__label">Address</span>
+                            <span className="ap-field__value">{formatAddress(p.user.address)}</span>
+                          </div>
+                        )}
                       </div>
 
                       {p.image && <img src={p.image} alt={`Preview of ${p.wasteType}`} className="ap-card__image" loading="lazy" />}
@@ -210,23 +309,38 @@ export default function AssignedPickups(): JSX.Element {
                     <div className="ap-card__right">
                       <div className="ap-card__time">{p.createdAt ? new Date(p.createdAt).toLocaleDateString() : ""}</div>
 
-                      <a href={p.user?.phone ? `tel:${p.user.phone}` : "#"} onClick={(e) => { if (!p.user?.phone) { e.preventDefault(); alert("No phone number available"); } }} className="ap-btn ap-btn--call" aria-label={`Call ${p.user?.name ?? "user"}`}>📞 Call user</a>
+                      <a
+                        href={p.user?.phone ? `tel:${p.user.phone}` : "#"}
+                        onClick={(e) => { if (!p.user?.phone) { e.preventDefault(); alert("No phone number available"); } }}
+                        className="ap-btn ap-btn--call"
+                        aria-label={`Call ${p.user?.name ?? "user"}`}
+                      >
+                        <PhoneIcon />
+                        Call user
+                      </a>
 
-                      <button onClick={() => handleView(p._id)} className="ap-btn ap-btn--view">View details</button>
+                      <button onClick={() => handleView(p._id)} className="ap-btn ap-btn--view" aria-label="View details">
+                        View details
+                      </button>
 
                       {!awaitingApproval && statusKey !== "picked" && statusKey !== "collected" && statusKey !== "completed" && (
-                        <button onClick={() => updatePickupStatus(p._id, "Picked")} disabled={!!updatingIds[p._id]} className="ap-btn ap-btn--picked">
-                          {updatingIds[p._id] ? "Updating…" : "Mark picked"}
+                        <button onClick={() => updatePickupStatus(p._id, "Picked")} disabled={!!updatingIds[p._id]} className="ap-btn ap-btn--picked" aria-label="Mark picked">
+                          {updatingIds[p._id] ? <><SpinnerIcon />Updating…</> : <><PickupIcon />Mark picked</>}
                         </button>
                       )}
 
                       {!awaitingApproval && statusKey === "picked" && (
-                        <button onClick={() => updatePickupStatus(p._id, "Collected")} disabled={!!updatingIds[p._id]} className="ap-btn ap-btn--complete">
-                          {updatingIds[p._id] ? "Updating…" : "✓ Mark completed"}
+                        <button onClick={() => updatePickupStatus(p._id, "Collected")} disabled={!!updatingIds[p._id]} className="ap-btn ap-btn--complete" aria-label="Mark completed">
+                          {updatingIds[p._id] ? <><SpinnerIcon />Updating…</> : <><CheckIcon />Mark completed</>}
                         </button>
                       )}
 
-                      {awaitingApproval && <div className="ap-awaiting">⏳ Awaiting admin approval</div>}
+                      {awaitingApproval && (
+                        <div className="ap-awaiting" role="status" aria-live="polite">
+                          <HourglassIcon />
+                          Awaiting admin approval
+                        </div>
+                      )}
                     </div>
                   </div>
                 </article>

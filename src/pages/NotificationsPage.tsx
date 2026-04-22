@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import api from "../api";
 import Sidebar from "../components/Sidebar";
 
@@ -18,31 +18,7 @@ export default function NotificationsPage(): React.JSX.Element {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const fetchNotifications = async (opts?: { page?: number }) => {
-    const newPage = opts?.page ?? page;
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await api.get("/notifications", {
-        params: { page: newPage, pageSize },
-      });
-      const data = res.data;
-      setItems(data?.data || []);
-      setTotal(data?.total || 0);
-      setPage(data?.page || newPage);
-    } catch (err: any) {
-      console.error("fetchNotifications error", err);
-      setError(err?.response?.data?.message || "Failed to load notifications");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchNotifications({ page: 1 });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const pollRef = useRef<number | null>(null);
 
   const showToast = (text: string, ttl = 1400) => {
     const n = document.createElement("div");
@@ -66,14 +42,67 @@ export default function NotificationsPage(): React.JSX.Element {
     }, ttl);
   };
 
+  const fetchNotifications = async (opts?: { page?: number }) => {
+    const newPage = opts?.page ?? page;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await api.get("/notifications", {
+        params: { page: newPage, pageSize },
+      });
+      const data = res.data;
+      setItems(data?.data || []);
+      setTotal(data?.total || 0);
+      setPage(data?.page || newPage);
+    } catch (err: any) {
+      console.error("fetchNotifications error", err);
+      setError(err?.response?.data?.message || "Failed to load notifications");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchNotifications({ page: 1 });
+
+    // poll every 15s for new notifications
+    pollRef.current = window.setInterval(() => {
+      fetchNotifications({ page });
+    }, 15000);
+
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleMarkAllRead = async () => {
     try {
       await api.post("/notifications/mark-all-read");
       showToast("All notifications marked as read ✓");
-      await fetchNotifications();
+      // update local state optimistically
+      setItems((cur) => cur.map((n) => ({ ...n, read: true })));
     } catch (err: any) {
       console.error("markAllRead error", err);
       showToast(err?.response?.data?.message || "Failed to mark all read");
+    }
+  };
+
+  const markOneRead = async (id: string) => {
+    // optimistic UI: mark locally first
+    setItems((cur) => cur.map((n) => (n._id === id ? { ...n, read: true } : n)));
+    try {
+      // controller exposes markRead — POST /notifications/:id/read assumed
+      await api.post(`/notifications/${id}/read`);
+      showToast("Marked read ✓");
+    } catch (err: any) {
+      console.error("markOneRead error", err);
+      // revert optimistic change on failure
+      setItems((cur) => cur.map((n) => (n._id === id ? { ...n, read: false } : n)));
+      showToast(err?.response?.data?.message || "Failed to mark notification read");
     }
   };
 
@@ -93,7 +122,7 @@ export default function NotificationsPage(): React.JSX.Element {
               <div className="nt-header-actions">
                 <button
                   className="nt-btn nt-btn--primary"
-                  onClick={() => fetchNotifications()}
+                  onClick={() => fetchNotifications({ page: 1 })}
                   disabled={loading}
                 >
                   {loading ? "Loading..." : "Refresh"}
@@ -121,10 +150,19 @@ export default function NotificationsPage(): React.JSX.Element {
                 {items.map((n) => (
                   <div
                     key={n._id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => { if (!n.read) markOneRead(n._id); }}
+                    onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !n.read) { e.preventDefault(); markOneRead(n._id); } }}
                     className={`nt-item ${n.read ? "nt-item--read" : "nt-item--unread"}`}
+                    aria-pressed={n.read}
+                    aria-label={`${n.title} ${n.read ? "read" : "unread"}`}
                   >
                     <div className="nt-item-header">
-                      <div className="nt-item-title">{n.title}</div>
+                      <div className="nt-item-title">
+                        {n.title}
+                        {!n.read && <span style={{ marginLeft: 8, color: "#0f8e57", fontSize: 12 }}>• new</span>}
+                      </div>
                       {n.createdAt && (
                         <div className="nt-item-date">
                           {new Date(n.createdAt).toLocaleString(undefined, {
@@ -147,7 +185,7 @@ export default function NotificationsPage(): React.JSX.Element {
               <button className="nt-btn" onClick={handlePrev} disabled={page <= 1 || loading}>
                 Prev
               </button>
-              <span className="nt-page-label">Page {page}</span>
+              <span className="nt-page-label">Page {page} / {maxPage}</span>
               <button
                 className="nt-btn"
                 onClick={handleNext}
@@ -175,10 +213,12 @@ const notifCss = `
   .nt-btn--primary { background: #2c9e6a; border-color: #2c9e6a; color: #fff; }
   .nt-btn:disabled { opacity: 0.6; cursor: not-allowed; }
   .nt-list { display: flex; flex-direction: column; gap: 8px; }
-  .nt-item { background: #ffffff; border-radius: 10px; border: 1px solid #dde8e2; padding: 10px 12px; }
-  .nt-item--unread { border-color: #c3e0d0; background: #f0f9f4; }
+  .nt-item { background: #ffffff; border-radius: 10px; border: 1px solid #dde8e2; padding: 10px 12px; outline: none; }
+  .nt-item--unread { border-color: #c3e0d0; background: #f0f9f4; cursor: pointer; }
+  .nt-item--read { opacity: 0.85; cursor: default; }
+  .nt-item:focus { box-shadow: 0 0 0 3px rgba(44,158,106,0.12); }
   .nt-item-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; }
-  .nt-item-title { font-size: 14px; font-weight: 500; color: #1a3326; }
+  .nt-item-title { font-size: 14px; font-weight: 500; color: #1a3326; display:flex; align-items:center; }
   .nt-item-date { font-size: 11px; color: #6b7f73; white-space: nowrap; }
   .nt-item-message { font-size: 13px; color: #314539; }
   .nt-empty { font-size: 14px; color: #6b7f73; padding: 40px 0; }

@@ -1,6 +1,6 @@
+// src/pages/CollectorDashboard.tsx
 import {
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useState,
@@ -8,7 +8,6 @@ import {
 } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
-import { AuthContext } from "../App";
 import CollectorSidebar from "../components/CollectorSidebar";
 
 /* ─────────────────────────── Styles ─────────────────────────── */
@@ -434,7 +433,6 @@ function badgeStyle(status?: string): React.CSSProperties {
   return { background: "#f3f4f6", color: "#4b5563" };
 }
 
-type AuthContextShape = { user?: any; roleState?: string; setAuthState?: (s: { isAuth: boolean; roleState: string }) => void };
 type User         = { name?: string; email?: string };
 type Stat         = { label: string; value: string | number };
 type PickupPreview = {
@@ -444,7 +442,6 @@ type PickupPreview = {
 
 export default function CollectorDashboard(): JSX.Element {
   const navigate = useNavigate();
-  const auth = useContext(AuthContext) as AuthContextShape | undefined;
 
   const [user, setUser]           = useState<User | null>(null);
   const [stats, setStats]         = useState<Stat[]>([
@@ -525,8 +522,18 @@ export default function CollectorDashboard(): JSX.Element {
         Array.isArray(raw) ? raw :
         Array.isArray(raw?.data) ? raw.data :
         Array.isArray(raw?.items) ? raw.items : [];
+
+      // Sort by createdAt (newest first) and keep only the latest two for dashboard preview
+      const sorted = [...arr].sort((a: any, b: any) => {
+        const ta = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const tb = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return tb - ta;
+      });
+
+      const latestTwo = sorted.slice(0, 2);
+
       setAvailable(
-        arr.slice(0, 6).map((p: any) => ({
+        latestTwo.map((p: any) => ({
           _id:       p._id ?? p.id ?? String(Math.random()).slice(2),
           wasteType: p.wasteType ?? p.type ?? "Unknown",
           quantity:  p.quantity ?? 0,
@@ -579,11 +586,6 @@ export default function CollectorDashboard(): JSX.Element {
     } finally { setAssigning(id, false); }
   }, [available, fetchAvailable, navigate, setAssigning]);
 
-  const logout = useCallback(() => {
-    ["accessToken","token","user","role"].forEach((k) => localStorage.removeItem(k));
-    try { auth?.setAuthState?.({ isAuth: false, roleState: "" }); } catch {}
-    navigate("/login", { replace: true });
-  }, [navigate, auth]);
 
   const firstName = useMemo(() => user?.name?.split(" ")?.[0] ?? "Collector", [user]);
 
@@ -686,7 +688,7 @@ export default function CollectorDashboard(): JSX.Element {
               )}
             </div>
 
-            {/* Available pickups */}
+            {/* Available pickups (show only latest two on dashboard) */}
             <div className="cd-card">
               <div className="cd-card__head">
                 <h3 className="cd-card__title">Available Pickups</h3>

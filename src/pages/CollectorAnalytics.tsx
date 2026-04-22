@@ -22,6 +22,32 @@ function formatNumber(n: number) {
   return String(n);
 }
 
+/* ── Small inline SVG icons (no external deps) ── */
+const smallIconStyle: React.CSSProperties = { width: 16, height: 16, display: "inline-block", verticalAlign: "middle", marginRight: 8, flexShrink: 0 };
+
+const RefreshIcon: React.FC<{ spin?: boolean }> = ({ spin }) => (
+  <svg style={{ ...smallIconStyle, transform: spin ? "rotate(90deg)" : undefined }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M20 12a8 8 0 1 0-2.3 5.3" />
+    <polyline points="20 12 20 6 14 6" />
+  </svg>
+);
+
+const WarningIcon: React.FC = () => (
+  <svg style={smallIconStyle} viewBox="0 0 24 24" fill="none" stroke="#b91c1c" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+    <line x1="12" y1="9" x2="12" y2="13" />
+    <line x1="12" y1="17" x2="12" y2="17" />
+  </svg>
+);
+
+const DownloadIcon: React.FC = () => (
+  <svg style={smallIconStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="7 10 12 15 17 10" />
+    <line x1="12" y1="15" x2="12" y2="3" />
+  </svg>
+);
+
 /* ── SVG Line Chart ── */
 function LineChart({
   data, height = 140, color = "#1a8a3c", valueKey = "pickups",
@@ -179,7 +205,8 @@ export default function CollectorAnalytics(): JSX.Element {
               </span>
             )}
             <button className="ca-btn" onClick={() => load()} disabled={loading}>
-              ↻ Refresh
+              <RefreshIcon spin={loading} />
+              {loading ? "Refreshing…" : "Refresh"}
             </button>
             <label className="ca-auto-pill">
               <input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} />
@@ -206,7 +233,14 @@ export default function CollectorAnalytics(): JSX.Element {
         )}
 
         {/* ── Error / Empty ── */}
-        {!loading && error  && <div className="ca-error">⚠ {error}</div>}
+        {!loading && error  && (
+          <div className="ca-error" role="alert">
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <WarningIcon />
+              <div className="ch-error__msg">{error}</div>
+            </div>
+          </div>
+        )}
         {!loading && !error && !data && <div className="ca-empty">No analytics available.</div>}
 
         {/* ── Content ── */}
@@ -246,7 +280,7 @@ export default function CollectorAnalytics(): JSX.Element {
                         `collector_series_${new Date().toISOString().slice(0,10)}.csv`
                       );
                     }}>
-                      ↓ CSV
+                      <DownloadIcon /> CSV
                     </button>
                   </div>
                 </div>
@@ -288,7 +322,7 @@ export default function CollectorAnalytics(): JSX.Element {
                         `collector_zones_${new Date().toISOString().slice(0,10)}.csv`
                       );
                     }}>
-                      ↓ CSV
+                      <DownloadIcon /> CSV
                     </button>
                   </div>
                   <Bars items={topZones} />

@@ -381,15 +381,117 @@ function badgeStyle(status?: string): React.CSSProperties {
   return { background: "#f1f5f9", color: "#475569" };
 }
 
-function wasteEmoji(type?: string): string {
+/* ── Icon components (replace emoji) ── */
+const smallIconStyle: React.CSSProperties = {
+  width: 16,
+  height: 16,
+  display: "inline-block",
+  verticalAlign: "middle",
+  marginRight: 8,
+  flexShrink: 0,
+};
+
+const RefreshIcon: React.FC<{ spin?: boolean }> = ({ spin }) => (
+  <svg style={{ ...smallIconStyle, transform: spin ? "rotate(90deg)" : undefined }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M20 12a8 8 0 1 0-2.3 5.3" />
+    <polyline points="20 12 20 6 14 6" />
+  </svg>
+);
+
+const WarningIcon: React.FC = () => (
+  <svg style={smallIconStyle} viewBox="0 0 24 24" fill="none" stroke="#b91c1c" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+    <line x1="12" y1="9" x2="12" y2="13" />
+    <line x1="12" y1="17" x2="12" y2="17" />
+  </svg>
+);
+
+const InboxIcon: React.FC = () => (
+  <svg style={{ width: 44, height: 44, display: "block" }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6" />
+    <polyline points="7 10 12 15 17 10" />
+    <path d="M22 7H2V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z" />
+  </svg>
+);
+
+const PinIcon: React.FC = () => (
+  <svg style={smallIconStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M21 10c0 6-9 11-9 11S3 16 3 10a9 9 0 0 1 18 0z" />
+    <circle cx="12" cy="10" r="2.5" />
+  </svg>
+);
+
+const UserIcon: React.FC = () => (
+  <svg style={smallIconStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </svg>
+);
+
+const TrashIcon: React.FC = () => (
+  <svg style={{ width: 20, height: 20 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <polyline points="3 6 5 6 21 6" />
+    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+    <path d="M10 11v6" />
+    <path d="M14 11v6" />
+    <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+  </svg>
+);
+
+/* ── Waste-type icon (replaces wasteEmoji) ── */
+function wasteIcon(type?: string): React.ReactNode {
   const t = (type ?? "").toLowerCase();
-  if (t.includes("plastic")) return "♻️";
-  if (t.includes("paper")) return "📄";
-  if (t.includes("metal")) return "🔩";
-  if (t.includes("glass")) return "🫙";
-  if (t.includes("organic") || t.includes("food")) return "🌿";
-  if (t.includes("e-waste") || t.includes("electronic")) return "💻";
-  return "🗑️";
+  if (t.includes("plastic")) {
+    return (
+      <svg style={{ width: 20, height: 20 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M21 15v4h-4" />
+        <path d="M3 9v-4h4" />
+        <path d="M14 3l-2 4" />
+        <path d="M10 21l2-4" />
+      </svg>
+    );
+  }
+  if (t.includes("paper")) {
+    return (
+      <svg style={{ width: 20, height: 20 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+      </svg>
+    );
+  }
+  if (t.includes("metal")) {
+    return (
+      <svg style={{ width: 20, height: 20 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+      </svg>
+    );
+  }
+  if (t.includes("glass")) {
+    return (
+      <svg style={{ width: 20, height: 20 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M7 21h10" />
+        <path d="M9 21V7a3 3 0 0 1 6 0v14" />
+        <path d="M9 7h6" />
+      </svg>
+    );
+  }
+  if (t.includes("organic") || t.includes("food")) {
+    return (
+      <svg style={{ width: 20, height: 20 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M21 7c0 7-9 13-9 13S3 13 3 6a9 9 0 0 1 18 1z" />
+        <path d="M8.5 10.5c2.2-1.8 4.2-2.1 6.5-2.4" />
+      </svg>
+    );
+  }
+  if (t.includes("e-waste") || t.includes("electronic") || t.includes("laptop") || t.includes("phone")) {
+    return (
+      <svg style={{ width: 20, height: 20 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <rect x="2" y="4" width="20" height="14" rx="2" />
+        <path d="M2 18h20" />
+      </svg>
+    );
+  }
+  return <TrashIcon />;
 }
 
 /* Resolve media URLs — prefer api.defaults.baseURL when provided */
@@ -428,24 +530,41 @@ type Pickup = {
 };
 
 /* ─────────────────────────── Thumbnail component ─────────────────────────── */
-function Thumbnail({ src, alt, emojiFallback }: { src?: string | null; alt?: string; emojiFallback?: string }) {
+function Thumbnail({ src, alt, fallbackIcon }: { src?: string | null; alt?: string; fallbackIcon?: React.ReactNode }) {
   const [failed, setFailed] = useState(false);
   const resolved = resolveUrl(src ?? "") ?? src ?? "";
 
   if (!resolved || failed) {
-    return <div className="ch-icon" aria-hidden>{emojiFallback ?? "🗑️"}</div>;
+    return <div className="ch-icon" aria-hidden>{fallbackIcon ?? wasteIcon(alt)}</div>;
   }
 
   return (
     <div className="ch-icon" aria-hidden>
-      <img
-        src={resolved}
-        alt={alt ?? "image"}
-        onError={() => setFailed(true)}
-      />
+      <img src={resolved} alt={alt ?? "image"} onError={() => setFailed(true)} />
     </div>
   );
 }
+
+/* ─────────────────────────── Status helpers (UPDATED) ─────────────────────────── */
+const normalizeStatus = (status?: string) => String(status ?? "").trim().toLowerCase();
+
+const isCompletedStatus = (status?: string) => {
+  const s = normalizeStatus(status);
+  return s === "completed" || s === "collected";
+};
+
+const isPendingStatus = (status?: string) => {
+  const s = normalizeStatus(status);
+  return s === "pending";
+};
+
+// Only keep items that are completed/collected OR pending
+const filterItems = (items: Pickup[]) => {
+  return items.filter((p) => {
+    const s = normalizeStatus(p.status);
+    return s === "completed" || s === "collected" || s === "pending";
+  });
+};
 
 /* ─────────────────────────── Component ─────────────────────────── */
 export default function CollectorHistory(): React.ReactElement {
@@ -460,10 +579,8 @@ export default function CollectorHistory(): React.ReactElement {
   const load = async () => {
     setLoading(true); setError(null); setStatusCode(null); setRawError(null);
     try {
-      // NOTE: use relative path here — api instance should include baseURL '/api'
       const res = await api.get("/collector/history");
       const data = Array.isArray(res.data) ? res.data : res.data?.data ?? [];
-      // normalize items to ensure image fields present if backend uses different keys
       const normalized: Pickup[] = data.map((d: any) => ({
         _id: d._id ?? d.id ?? String(Math.random()).slice(2),
         wasteType: d.wasteType ?? d.type ?? d.category,
@@ -509,7 +626,6 @@ export default function CollectorHistory(): React.ReactElement {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* ── Skeleton ── */
   const Skeletons = () => (
     <div style={{ display: "grid", gap: 10 }}>
       {[0,1,2,3,4].map((i) => (
@@ -534,6 +650,11 @@ export default function CollectorHistory(): React.ReactElement {
     </div>
   );
 
+  // Filter items to show ONLY completed/collected OR pending
+  const filteredItems = filterItems(items);
+  const completedItems = filteredItems.filter((p) => isCompletedStatus(p.status));
+  const pendingItems = filteredItems.filter((p) => isPendingStatus(p.status));
+
   return (
     <>
       <style>{css}</style>
@@ -543,27 +664,29 @@ export default function CollectorHistory(): React.ReactElement {
         <main className="ch-main">
           <div className="ch-inner">
 
-            {/* ── Header ── */}
             <div className="ch-header">
               <div>
                 <h2 className="ch-title">Pickup History</h2>
                 <p className="ch-sub">All your past and current pickup assignments</p>
               </div>
-              {!loading && !error && items.length > 0 && (
-                <span className="ch-count">{items.length} records</span>
+              {!loading && !error && filteredItems.length > 0 && (
+                <span className="ch-count">{filteredItems.length} records</span>
               )}
             </div>
 
-            {/* ── Loading ── */}
             {loading && <Skeletons />}
 
-            {/* ── Error ── */}
             {!loading && error && (
               <div className="ch-error">
-                <div className="ch-error__msg">⚠ {error}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <WarningIcon />
+                  <div className="ch-error__msg">{error}</div>
+                </div>
+
                 {statusCode && <div className="ch-error__code">HTTP {statusCode}</div>}
+
                 <div className="ch-error__actions">
-                  <button className="ch-btn ch-btn--primary" onClick={load}>↻ Retry</button>
+                  <button className="ch-btn ch-btn--primary" onClick={load}><RefreshIcon /> Retry</button>
                   <button className="ch-btn" onClick={() => window.open(`${(window as any).__API_BASE__ || ""}/collector/history`, "_blank")}>
                     Open endpoint ↗
                   </button>
@@ -571,6 +694,7 @@ export default function CollectorHistory(): React.ReactElement {
                     {showDetails ? "Hide details" : "Show details"}
                   </button>
                 </div>
+
                 {showDetails && (
                   <pre className="ch-error__raw">
                     <strong>HTTP status:</strong> {statusCode ?? "N/A"}{"\n\n"}
@@ -581,70 +705,116 @@ export default function CollectorHistory(): React.ReactElement {
               </div>
             )}
 
-            {/* ── Empty ── */}
-            {!loading && !error && items.length === 0 && (
+            {!loading && !error && filteredItems.length === 0 && (
               <div className="ch-empty">
-                <div className="ch-empty__icon">📭</div>
+                <div className="ch-empty__icon" aria-hidden>
+                  <InboxIcon />
+                </div>
                 <div className="ch-empty__title">No pickup history yet</div>
-                <div className="ch-empty__sub">Completed and assigned pickups will appear here</div>
+                <div className="ch-empty__sub">Completed and pending pickups will appear here</div>
               </div>
             )}
 
-            {/* ── List ── */}
-            {!loading && !error && items.length > 0 && (
-              <ul className="ch-list">
-                {items.map((p, idx) => (
-                  <li key={p._id} className="ch-card" style={{ animationDelay: `${Math.min(idx * 40, 280)}ms` }}>
+            {!loading && !error && completedItems.length > 0 && (
+              <>
+                <h3 style={{ marginTop: 12 }}>Completed / Collected</h3>
+                <ul className="ch-list" aria-label="Completed pickups">
+                  {completedItems.map((p, idx) => (
+                    <li key={p._id} className="ch-card" style={{ animationDelay: `${Math.min(idx * 40, 280)}ms` }}>
+                      <div className="ch-card__top">
+                        <div className="ch-card__left">
+                          <Thumbnail src={p.imageUrl ?? p.image ?? null} alt={p.wasteType} fallbackIcon={wasteIcon(p.wasteType)} />
 
-                    <div className="ch-card__top">
-                      <div className="ch-card__left">
-                        {/* Thumbnail: prefer imageUrl/image, fallback to emoji */}
-                        <Thumbnail src={p.imageUrl ?? p.image ?? null} alt={p.wasteType} emojiFallback={wasteEmoji(p.wasteType)} />
-
-                        <div className="ch-card__meta">
-                          <div className="ch-card__type">{p.wasteType ?? "Unknown"}</div>
-                          <div className="ch-card__info">
-                            <span>{p.quantity ?? 0} kg</span>
-                            {p.location && (
-                              <>
-                                <span className="ch-card__info-sep">·</span>
-                                <span>📍 {p.location}</span>
-                              </>
-                            )}
+                          <div className="ch-card__meta">
+                            <div className="ch-card__type">{p.wasteType ?? "Unknown"}</div>
+                            <div className="ch-card__info">
+                              <span>{p.quantity ?? 0} kg</span>
+                              {p.location && (
+                                <>
+                                  <span className="ch-card__info-sep">·</span>
+                                  <span><PinIcon />{p.location}</span>
+                                </>
+                              )}
+                            </div>
                           </div>
+                        </div>
+
+                        <div className="ch-card__right">
+                          <span className="ch-badge" style={badgeStyle(p.status)}>
+                            {p.status ?? "unknown"}
+                          </span>
+                          <span className="ch-card__time">
+                            {p.createdAt ? new Date(p.createdAt).toLocaleDateString() : "—"}
+                          </span>
                         </div>
                       </div>
 
-                      <div className="ch-card__right">
-                        <span className="ch-badge" style={badgeStyle(p.status)}>
-                          {p.status ?? "unknown"}
-                        </span>
-                        <span className="ch-card__time">
-                          {p.createdAt ? new Date(p.createdAt).toLocaleDateString() : "—"}
-                        </span>
+                      <div className="ch-card__footer">
+                        <button className="ch-btn ch-btn--primary ch-btn--sm" onClick={() => navigate(`/collector/history/${p._id}`)}>
+                          View details
+                        </button>
+
+                        <Link to={`/track/${p._id}`} className="ch-link">
+                          ↗ Track
+                        </Link>
+
+                        {p.user?.name && (
+                          <span className="ch-card__user"><UserIcon />{p.user.name}</span>
+                        )}
                       </div>
-                    </div>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
 
-                    <div className="ch-card__footer">
-                      <button
-                        className="ch-btn ch-btn--primary ch-btn--sm"
-                        onClick={() => navigate(`/collector/history/${p._id}`)}
-                      >
-                        View details
-                      </button>
+            {!loading && !error && pendingItems.length > 0 && (
+              <>
+                <h3 style={{ marginTop: 20 }}>Pending</h3>
+                <ul className="ch-list" aria-label="Pending pickups">
+                  {pendingItems.map((p, idx) => (
+                    <li key={p._id} className="ch-card" style={{ animationDelay: `${Math.min(idx * 40, 280)}ms` }}>
+                      <div className="ch-card__top">
+                        <div className="ch-card__left">
+                          <Thumbnail src={p.imageUrl ?? p.image ?? null} alt={p.wasteType} fallbackIcon={wasteIcon(p.wasteType)} />
 
-                      <Link to={`/track/${p._id}`} className="ch-link">
-                        ↗ Track
-                      </Link>
+                          <div className="ch-card__meta">
+                            <div className="ch-card__type">{p.wasteType ?? "Unknown"}</div>
+                            <div className="ch-card__info">
+                              <span>{p.quantity ?? 0} kg</span>
+                              {p.location && (
+                                <>
+                                  <span className="ch-card__info-sep">·</span>
+                                  <span><PinIcon />{p.location}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
 
-                      {p.user?.name && (
-                        <span className="ch-card__user">👤 {p.user.name}</span>
-                      )}
-                    </div>
+                        <div className="ch-card__right">
+                          <span className="ch-badge" style={badgeStyle(p.status)}>{p.status ?? "unknown"}</span>
+                          <span className="ch-card__time">{p.createdAt ? new Date(p.createdAt).toLocaleDateString() : "—"}</span>
+                        </div>
+                      </div>
 
-                  </li>
-                ))}
-              </ul>
+                      <div className="ch-card__footer">
+                        <button className="ch-btn ch-btn--primary ch-btn--sm" onClick={() => navigate(`/collector/history/${p._id}`)}>
+                          View details
+                        </button>
+
+                        <Link to={`/track/${p._id}`} className="ch-link">
+                          ↗ Track
+                        </Link>
+
+                        {p.user?.name && (
+                          <span className="ch-card__user"><UserIcon />{p.user.name}</span>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
 
           </div>

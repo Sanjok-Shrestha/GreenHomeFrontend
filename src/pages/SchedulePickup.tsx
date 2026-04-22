@@ -1,5 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, type JSX } from "react";
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
+import {
+  FiTruck,
+  FiRefreshCw,
+  FiCalendar,
+  FiClock,
+  FiClipboard,
+  FiInfo,
+  FiAlertTriangle,
+  FiEdit2,
+  FiTrash2,
+} from "react-icons/fi";
 import api from "../api";
 import Sidebar from "../components/Sidebar";
 import "./SchedulePickup.css";
@@ -27,6 +38,11 @@ function isWithinWindow(dateIso: string | null) {
   return d.getHours() >= 8 && d.getHours() < 18;
 }
 
+/**
+ * callWithFallbacks
+ * - tries several endpoints until one succeeds
+ * - returns richer error info including server message when available
+ */
 async function callWithFallbacks(
   attempts: { method: "patch" | "post" | "put" | "delete"; url: string; body?: any }[]
 ) {
@@ -43,7 +59,12 @@ async function callWithFallbacks(
     } catch (err: any) {
       tried.push({ url: a.url, method: a.method, err });
       const code = err?.response?.status;
-      if (code && code !== 404 && code !== 409) return { ok: false, used: a, err, tried };
+      // If server returned something other than 404/409, surface it to caller (so they can show message)
+      if (code && code !== 404 && code !== 409) {
+        const serverMessage = err?.response?.data?.message ?? err?.response?.data ?? err?.message;
+        return { ok: false, used: a, err, tried, serverMessage };
+      }
+      // otherwise continue trying
     }
   }
   return { ok: false, tried };
@@ -175,15 +196,27 @@ export default function SchedulePickup(): JSX.Element {
   };
 
   const schedulePickup = async (id: string, iso: string | null, navigateAfter = true) => {
-    if (!iso) return showToast("Invalid date/time", true);
-    if (new Date(iso) <= new Date()) return showToast("Please select a future date/time", true);
-    if (!isWithinWindow(iso)) return showToast("Choose a time between 08:00 and 18:00", true);
+    if (!iso) {
+      showToast("Invalid date/time", true);
+      return;
+    }
+    if (new Date(iso) <= new Date()) {
+      showToast("Please select a future date/time", true);
+      return;
+    }
+    if (!isWithinWindow(iso)) {
+      showToast("Choose a time between 08:00 and 18:00", true);
+      return;
+    }
 
     setGlobalLoading(true);
     setUpdating(id, true);
     const rollback = optimisticUpdate(id, { pickupDate: iso, status: "scheduled" });
 
     try {
+      // Debug: log what we're sending
+      console.debug("[SchedulePickup] scheduling", { id, iso });
+
       const attempts = [
         { method: "put" as const, url: `/waste/schedule/${id}`, body: { pickupDate: iso } },
         { method: "post" as const, url: `/waste/schedule`, body: { id, pickupDate: iso } },
@@ -193,16 +226,26 @@ export default function SchedulePickup(): JSX.Element {
       const result = await callWithFallbacks(attempts);
 
       if (!result.ok) {
-        const status = result.tried?.[result.tried.length - 1]?.err?.response?.status;
         rollback();
-        showToast(status === 403 ? "Forbidden: you cannot schedule this item." : "Scheduling failed", true);
+        // prefer serverMessage if available
+        const serverMsg = (result as any).serverMessage || result.tried?.[result.tried.length - 1]?.err?.response?.data?.message;
+        const status = result.tried?.[result.tried.length - 1]?.err?.response?.status;
+        // Log full result for debugging
+        console.warn("[SchedulePickup] schedule failed", { result, serverMsg, status });
+        if (serverMsg) {
+          showToast(String(serverMsg), true);
+        } else {
+          showToast(status === 403 ? "Forbidden: you cannot schedule this item." : "Scheduling failed", true);
+        }
         return;
       }
 
+      // Success: use returned data if available
       const updated = result.res?.data?.data ?? result.res?.data;
       if (updated && (updated._id || updated.pickupDate)) {
         setWasteItems((cur) => cur.map((p) => (p._id === id ? normalizeSingle(updated) : p)));
       } else {
+        // fallback refresh
         await fetchItems();
       }
 
@@ -210,7 +253,9 @@ export default function SchedulePickup(): JSX.Element {
       if (navigateAfter) navigate("/pickups");
     } catch (err: any) {
       rollback();
-      showToast(err?.response?.data?.message ?? err?.message ?? "Scheduling error", true);
+      console.error("[SchedulePickup] unexpected error", err);
+      const msg = err?.response?.data?.message || err?.message || "Scheduling error";
+      showToast(msg, true);
     } finally {
       setUpdating(id, false);
       setGlobalLoading(false);
@@ -227,9 +272,16 @@ export default function SchedulePickup(): JSX.Element {
         { method: "post" as const, url: `/waste/schedule`, body: { id, pickupDate: null } },
       ]);
       if (result.ok) { showToast("Schedule cancelled"); await fetchItems(); }
-      else { rollback(); showToast("Cancel failed", true); }
-    } catch { rollback(); showToast("Cancel request failed", true); }
-    finally { setUpdating(id, false); setGlobalLoading(false); setConfirmModal(null); }
+      else {
+        rollback();
+        const serverMsg = (result as any).serverMessage || result.tried?.[result.tried.length - 1]?.err?.response?.data?.message;
+        console.warn("[SchedulePickup] cancel failed", { result, serverMsg });
+        showToast(serverMsg ?? "Cancel failed", true);
+      }
+    } catch (e) {
+      rollback();
+      showToast("Cancel request failed", true);
+    } finally { setUpdating(id, false); setGlobalLoading(false); setConfirmModal(null); }
   };
 
   const combineDateTime = (date: string, time: string) => {
@@ -245,7 +297,7 @@ export default function SchedulePickup(): JSX.Element {
     if (!iso) return setError("Please pick valid date and time.");
     if (new Date(iso) <= new Date()) return setError("Pick a future date & time.");
     setIsEditing(false);
-    schedulePickup(selectedWaste, iso, false);
+    schedulePickup(selectedWaste, iso);
   };
 
   const startInlineEdit = (w: WasteItem) => {
@@ -293,7 +345,7 @@ export default function SchedulePickup(): JSX.Element {
       <main className="sp-main" role="main">
         <header className="sp-header">
           <div className="sp-header-left">
-            <h1 className="sp-title">🚚 Schedule Pickup</h1>
+            <h1 className="sp-title"><FiTruck className="icon" style={{ marginRight: 8 }} /> Schedule Pickup</h1>
             <div className="sp-sub">Choose a convenient time — collectors are notified</div>
           </div>
 
@@ -311,9 +363,9 @@ export default function SchedulePickup(): JSX.Element {
                 onChange={(e) => setSearch(e.target.value)}
               />
               <button className="sp-action-btn" onClick={() => fetchItems()} aria-label="Refresh" disabled={fetchLoading}>
-                🔄 Refresh
+                <FiRefreshCw className="icon" style={{ marginRight: 8 }} /> Refresh
               </button>
-              <div className="sp-avatar">
+              <div className="sp-avatar" title={user?.name ?? "User"}>
                 {user?.name?.charAt(0)?.toUpperCase() ?? "U"}
               </div>
             </div>
@@ -323,9 +375,9 @@ export default function SchedulePickup(): JSX.Element {
         <section className="sp-grid">
           {/* Form card */}
           <div className="sp-card">
-            <h3 className="sp-card-title">📅 New pickup</h3>
+            <h3 className="sp-card-title"><FiCalendar className="icon" style={{ marginRight: 8 }} /> New pickup</h3>
 
-            {error && <div className="sp-error-banner">{error}</div>}
+            {error && <div className="sp-error-banner"><FiAlertTriangle style={{ marginRight: 8 }} />{error}</div>}
 
             <form onSubmit={onSubmit}>
               <label className="sp-label" htmlFor="waste-select">Waste item</label>
@@ -377,7 +429,7 @@ export default function SchedulePickup(): JSX.Element {
 
               <div className="sp-form-actions">
                 <button type="submit" className="sp-button" disabled={globalLoading || fetchLoading}>
-                  {globalLoading ? "Working…" : "Schedule pickup"}
+                  {globalLoading ? "Working…" : <><FiCalendar className="icon" style={{ marginRight: 8 }} /> Schedule pickup</>}
                 </button>
                 <button
                   type="button"
@@ -396,7 +448,7 @@ export default function SchedulePickup(): JSX.Element {
             {/* Pending */}
             <div className="sp-card">
               <div className="sp-section-head">
-                <h4>⏳ Pending</h4>
+                <h4><FiClock style={{ marginRight: 8 }} /> Pending</h4>
                 <span className="sp-count">{pendingList.length}</span>
               </div>
 
@@ -419,7 +471,7 @@ export default function SchedulePickup(): JSX.Element {
                             onClick={() => { setSelectedWaste(w._id); setPickupDate(""); setPickupTime(""); setIsEditing(false); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                             aria-label={`Schedule ${w.wasteType}`}
                           >
-                            Schedule
+                            <FiCalendar className="icon" style={{ marginRight: 6 }} /> Schedule
                           </button>
                         </div>
                       </div>
@@ -427,7 +479,6 @@ export default function SchedulePickup(): JSX.Element {
                   )}
                 </div>
 
-                {/* fade + toggle (only when more than 2 items) */}
                 {!pendingExpanded && pendingList.length > 2 && (
                   <>
                     <div className="sp-pending-fade" aria-hidden="true" />
@@ -449,7 +500,7 @@ export default function SchedulePickup(): JSX.Element {
             {/* Scheduled */}
             <div className="sp-card" style={{ marginTop: 16 }}>
               <div className="sp-section-head">
-                <h4>📋 Scheduled</h4>
+                <h4><FiClipboard style={{ marginRight: 8 }} /> Scheduled</h4>
                 <span className="sp-count">{scheduledList.length}</span>
               </div>
 
@@ -486,11 +537,11 @@ export default function SchedulePickup(): JSX.Element {
                                 onFocus={() => setIsEditing(true)}
                                 onBlur={() => setIsEditing(false)}
                               />
-                              <button className="sp-action-btn" onClick={() => saveInlineEdit(w._id)} disabled={!!updatingIds[w._id]}>Save</button>
+                              <button className="sp-action-btn" onClick={() => saveInlineEdit(w._id)} disabled={!!updatingIds[w._id]}><FiEdit2 className="icon" style={{ marginRight: 6 }} />Save</button>
                               <button className="sp-action-btn" onClick={() => cancelInlineEdit(w._id)} disabled={!!updatingIds[w._id]}>Cancel</button>
                             </div>
                           ) : isScheduled && (
-                            <div className="sp-item-scheduled">📅 {formatLocal(w.pickupDate ?? "")}</div>
+                            <div className="sp-item-scheduled"><FiCalendar className="icon" style={{ marginRight: 6 }} />{formatLocal(w.pickupDate ?? "")}</div>
                           )}
                         </div>
 
@@ -500,20 +551,20 @@ export default function SchedulePickup(): JSX.Element {
                               className="sp-action-btn"
                               onClick={() => { setSelectedWaste(w._id); setPickupDate(""); setPickupTime(""); setIsEditing(false); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                             >
-                              Schedule
+                              <FiCalendar className="icon" style={{ marginRight: 6 }} />Schedule
                             </button>
                           ) : (
                             <>
                               <button className="sp-action-btn" onClick={() => startInlineEdit(w)} disabled={!!updatingIds[w._id]}>
-                                Reschedule
+                                <FiEdit2 className="icon" style={{ marginRight: 6 }} />Reschedule
                               </button>
                               <button className="sp-action-btn danger" onClick={() => setConfirmModal({ action: "cancel", item: w })} disabled={!!updatingIds[w._id]}>
-                                Cancel
+                                <FiTrash2 className="icon" style={{ marginRight: 6 }} />Cancel
                               </button>
                             </>
                           )}
                           <div className={`sp-badge${isScheduled ? "" : " pending"}`}>
-                            {isScheduled ? formatLocal(w.pickupDate ?? "") : "Pending"}
+                            {isScheduled ? <><FiCalendar className="icon" style={{ marginRight: 6 }} />{formatLocal(w.pickupDate ?? "")}</> : "Pending"}
                           </div>
                         </div>
                       </div>
@@ -527,7 +578,7 @@ export default function SchedulePickup(): JSX.Element {
 
         <section className="sp-guidelines">
           <div className="sp-card">
-            <h4 className="sp-card-title">ℹ️ Pickup Guidelines</h4>
+            <h4 className="sp-card-title"><FiInfo className="icon" style={{ marginRight: 8 }} /> Pickup Guidelines</h4>
             <ul>
               <li>Schedule at least 1 hour ahead</li>
               <li>Keep items ready and accessible</li>

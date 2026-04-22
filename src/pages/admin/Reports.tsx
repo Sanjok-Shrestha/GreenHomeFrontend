@@ -6,6 +6,7 @@ import "./Reports.css";
 type Summary = {
   totalUsers?: number; totalPosts?: number;
   totalPickups?: number; totalEarnings?: number;
+  totalPoints?: number; totalpoints?: number;
 };
 type Row = {
   id?: string; _id?: string; date: string; user?: string;
@@ -25,8 +26,24 @@ export default function Reports() {
     try {
       const res  = await api.get("/admin/reports", { params: { from, to } });
       const data = res.data;
-      if (Array.isArray(data)) { setRows(data); setSummary({}); }
-      else { setSummary(data.summary ?? {}); setRows(data.rows ?? []); }
+
+      // Normalize rows and summary depending on response shape
+      if (Array.isArray(data)) {
+        setRows(data);
+        setSummary({});
+      } else {
+        // backend returns { summary, rows } (your example)
+        const parsedSummary = data.summary ?? {};
+        let parsedRows: Row[] = data.rows ?? [];
+
+        // also handle wrapped shapes like data.data
+        if ((!parsedRows || parsedRows.length === 0) && Array.isArray(data.data)) {
+          parsedRows = data.data;
+        }
+
+        setRows(parsedRows);
+        setSummary(parsedSummary);
+      }
     } catch (err: any) {
       setError(err?.response?.data?.message || "Failed to load reports");
     } finally { setLoading(false); }
@@ -35,6 +52,15 @@ export default function Reports() {
   useEffect(() => { load(); }, []);
 
   const totalRevenue = useMemo(() => rows.reduce((s, r) => s + (r.price || 0), 0), [rows]);
+
+  // Derived display value for total posts: use backend value when > 0, otherwise fallback to number of unique rows
+  const displayedTotalPosts = useMemo(() => {
+    const backend = Number(summary.totalPosts ?? 0);
+    if (backend && backend > 0) return backend;
+    // fallback: count unique ids from rows (dedupe if same id appears multiple times)
+    const ids = new Set(rows.map(r => (r.id ?? r._id ?? "").toString()).filter(Boolean));
+    return ids.size || rows.length;
+  }, [summary.totalPosts, rows]);
 
   function exportCSV() {
     if (!rows.length) return alert("No data to export");
@@ -131,15 +157,15 @@ export default function Reports() {
                 </div>
                 <div className="rp-metric">
                   <div className="rp-metric__label">Total Posts</div>
-                  <div className="rp-metric__value">{(summary.totalPosts ?? 0).toLocaleString()}</div>
+                  <div className="rp-metric__value">{displayedTotalPosts.toLocaleString()}</div>
                 </div>
                 <div className="rp-metric rp-metric--blue">
                   <div className="rp-metric__label">Total Pickups</div>
                   <div className="rp-metric__value">{(summary.totalPickups ?? 0).toLocaleString()}</div>
                 </div>
                 <div className="rp-metric rp-metric--green">
-                  <div className="rp-metric__label">Total Earnings</div>
-                  <div className="rp-metric__value">Rs {(summary.totalEarnings ?? 0).toLocaleString()}</div>
+                  <div className="rp-metric__label">Total points</div>
+                  <div className="rp-metric__value">{(summary.totalPoints ?? summary.totalpoints ?? 0).toLocaleString()}</div>
                 </div>
               </div>
 

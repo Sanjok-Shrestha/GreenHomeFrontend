@@ -1,3 +1,4 @@
+// src/pages/RegisterPage.tsx
 import React, { useState, type JSX } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api";
@@ -57,7 +58,35 @@ export default function RegisterPage(): JSX.Element {
 
     setLoading(true);
     try {
-      await api.post("/auth/register", formData);
+      // Build an address object from the textarea (best-effort parsing)
+      const addrLines = formData.address
+        .split(/\r?\n|,/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+      const addressObj = addrLines.length
+        ? {
+            line1: addrLines[0],
+            line2: addrLines.length > 1 ? addrLines.slice(1).join(", ") : null,
+            city: null,
+            state: null,
+            postalCode: null,
+            country: null,
+          }
+        : null;
+
+      const payload = {
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        password: formData.password,
+        role: formData.role,
+        phone: formData.phone.replace(/[\s\-().+]/g, ""), // send digits-only phone
+        // send both structured object and the raw string for compatibility
+        address: addressObj,
+        addressString: formData.address.trim(),
+      };
+
+      await api.post("/auth/register", payload);
       navigate("/login");
     } catch (err: any) {
       setError(err?.response?.data?.message || "Registration failed");

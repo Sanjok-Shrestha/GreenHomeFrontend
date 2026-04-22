@@ -1,4 +1,3 @@
-// src/pages/HistoryPage.tsx
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api";
@@ -36,7 +35,9 @@ export default function HistoryPage(): React.JSX.Element {
     }
   };
 
-  useEffect(() => { fetchItems(); }, []);
+  useEffect(() => {
+    fetchItems();
+  }, []);
 
   const visible = items
     .filter((w) => {
@@ -65,6 +66,42 @@ export default function HistoryPage(): React.JSX.Element {
     setTimeout(() => { try { document.body.removeChild(n); } catch {} }, 1200);
   };
 
+  /* ── Icons ── */
+  const IconStyle: React.CSSProperties = { width: 16, height: 16, display: "inline-block", verticalAlign: "middle", marginRight: 8, flexShrink: 0 };
+
+  const RefreshIcon: React.FC<{ spin?: boolean }> = ({ spin }) => (
+    <svg style={{ ...IconStyle, transform: spin ? "rotate(90deg)" : undefined }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M20 12a8 8 0 1 0-2.3 5.3" />
+      <polyline points="20 12 20 6 14 6" />
+    </svg>
+  );
+
+  const WarningIcon: React.FC = () => (
+    <svg style={IconStyle} viewBox="0 0 24 24" fill="none" stroke="#c0392b" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+      <line x1="12" y1="9" x2="12" y2="13" />
+      <line x1="12" y1="17" x2="12" y2="17" />
+    </svg>
+  );
+
+  const InboxIcon: React.FC = () => (
+    <svg style={{ width: 36, height: 36, display: "block" }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6" />
+      <polyline points="7 10 12 15 17 10" />
+      <path d="M22 7H2V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+
+  const BinIcon: React.FC = () => (
+    <svg style={{ width: 20, height: 20 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+      <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+    </svg>
+  );
+
   return (
     <>
       <style>{css}</style>
@@ -80,7 +117,7 @@ export default function HistoryPage(): React.JSX.Element {
                 <p className="hp-sub">Your completed and collected pickups</p>
               </div>
               <button onClick={fetchItems} className="hp-btn" disabled={loading}>
-                {loading ? "Loading…" : "↻ Refresh"}
+                {loading ? (<><RefreshIcon spin /> Refreshing…</>) : (<><RefreshIcon /> Refresh</>)}
               </button>
             </div>
 
@@ -103,7 +140,8 @@ export default function HistoryPage(): React.JSX.Element {
             {/* Error */}
             {!loading && error && (
               <div className="hp-error">
-                <span>⚠ {error}</span>
+                <WarningIcon />
+                <span style={{ flex: 1 }}>{error}</span>
                 <button className="hp-btn hp-btn--primary" onClick={fetchItems}>Retry</button>
               </div>
             )}
@@ -111,7 +149,9 @@ export default function HistoryPage(): React.JSX.Element {
             {/* Empty */}
             {!loading && !error && visible.length === 0 && (
               <div className="hp-empty">
-                <div className="hp-empty__icon">📭</div>
+                <div className="hp-empty__icon" aria-hidden>
+                  <InboxIcon />
+                </div>
                 <div className="hp-empty__title">No completed pickups yet</div>
                 <div className="hp-empty__sub">Completed pickups will appear here</div>
               </div>
@@ -127,7 +167,7 @@ export default function HistoryPage(): React.JSX.Element {
                     <div className="hp-thumb">
                       {w.imageUrl
                         ? <Thumbnail imageUrl={w.imageUrl} />
-                        : <span className="hp-thumb__fallback">🗑️</span>
+                        : <span className="hp-thumb__fallback" aria-hidden><BinIcon /></span>
                       }
                     </div>
 
@@ -235,7 +275,7 @@ function Thumbnail({ imageUrl }: { imageUrl?: string | null }) {
     return () => { mounted = false; if (objectUrl) try { URL.revokeObjectURL(objectUrl); } catch {} };
   }, [imageUrl]);
 
-  if (err || !src) return <span className="hp-thumb__fallback">🗑️</span>;
+  if (err || !src) return <span className="hp-thumb__fallback"><svg style={{ width: 20, height: 20 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg></span>;
   return <img src={src} alt="waste thumbnail" className="hp-thumb__img" onError={() => setErr(true)} />;
 }
 
@@ -504,7 +544,7 @@ const css = `
     text-align: center;
   }
 
-  .hp-empty__icon { font-size: 34px; margin-bottom: 4px; line-height: 1; }
+  .hp-empty__icon { margin-bottom: 4px; line-height: 1; display:flex; align-items:center; justify-content:center; width:56px; height:56px; border-radius:12px; background:#fff; border:1px solid #e6efe8; }
   .hp-empty__title { font-size: 15px; font-weight: 500; color: #1a3326; }
   .hp-empty__sub { font-size: 13px; color: #6b7f73; }
 

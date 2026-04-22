@@ -7,6 +7,7 @@ import "./LoginPage.css";
 
 type LoginResponse = {
   token?: string;
+  accessToken?: string;
   user?: { role?: string; [k: string]: any };
   role?: string;
   code?: string;
@@ -32,6 +33,7 @@ const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const auth = useContext(AuthContext);
   const setAuthState = auth?.setAuthState;
+
   const [loading, setLoading] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -47,39 +49,56 @@ const LoginPage: React.FC = () => {
     setFormData((s) => ({ ...s, [name]: value }));
   };
 
+  const hardLogoutLocal = () => {
+    try {
+      localStorage.removeItem("token");
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("user");
+      localStorage.removeItem("role");
+      delete api.defaults.headers.common.Authorization;
+      setAuthState?.({ isAuth: false, roleState: "" });
+    } catch {
+      // ignore
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setErrorMessage(null);
 
     try {
-      const res = await api.post<LoginResponse>("/auth/login", formData, {
+      const email = formData.email.trim();
+      const password = formData.password;
+
+      // send common variants; backend will use what it expects
+      const payload = { email, password, identifier: email, username: email };
+
+      const res = await api.post<LoginResponse>("/auth/login", payload, {
         headers: { "Content-Type": "application/json" },
       });
 
-      const token = res.data?.token;
+      const token = res.data?.token || res.data?.accessToken;
+      if (!token) throw new Error(res.data?.message || "Login failed: server did not return token");
+
+      localStorage.setItem("token", token);
+      localStorage.setItem("accessToken", token);
+      api.defaults.headers.common.Authorization = `Bearer ${token}`;
+
       const userFromResponse = res.data?.user ?? {};
       let role = (res.data?.role || userFromResponse.role || "") as string;
 
-      if (!role && token) {
-        const payload = decodeJwt(token);
-        role = payload?.role || payload?.data?.role || "";
+      if (!role) {
+        const jwt = decodeJwt(token);
+        role = jwt?.role || jwt?.data?.role || "";
       }
 
-      if (token) {
-        localStorage.setItem("token", token);
-        localStorage.setItem("accessToken", token);
-        api.defaults.headers.common.Authorization = `Bearer ${token}`;
-      }
-
-      // Fetch canonical profile if available
+      // try to fetch profile, but don't fail login if endpoint doesn't exist
       let profile: any = userFromResponse;
       try {
         const profRes = await api.get("/users/profile");
         profile = profRes.data ?? profile;
-      } catch (fetchErr) {
-        console.warn("Could not fetch profile after login:", fetchErr);
-      }
+      } catch {}
 
       role = (role || profile?.role || "").toString().trim().toLowerCase();
       if (!role) role = "user";
@@ -87,14 +106,9 @@ const LoginPage: React.FC = () => {
       localStorage.setItem("user", JSON.stringify(profile || {}));
       localStorage.setItem("role", role);
 
-      try {
-        setAuthState?.({ isAuth: true, roleState: role });
-        console.log("LOGIN: setAuthState ->", { isAuth: true, roleState: role });
-      } catch {
-        // ignore
-      }
+      // ✅ only set auth state after token exists
+      setAuthState?.({ isAuth: true, roleState: role });
 
-      // Wait a tick so App picks up the new authState then navigate to canonical routes.
       setTimeout(() => {
         if (role === "admin") navigate("/admin", { replace: true });
         else if (role === "collector") navigate("/collector/dashboard", { replace: true });
@@ -102,20 +116,18 @@ const LoginPage: React.FC = () => {
       }, 75);
     } catch (error: any) {
       console.error("Login error:", error);
-      if (error.response) {
-        const status = error.response.status;
-        const data = error.response.data;
-        if (status === 400) setErrorMessage(data?.message || "Invalid request / credentials");
-        else if (status === 401) setErrorMessage(data?.message || "Unauthorized");
-        else if (status === 403) {
-          if (data?.code === "ACCOUNT_NOT_APPROVED") setErrorMessage(data?.message || "Account not approved yet");
-          else setErrorMessage(data?.message || "Forbidden");
-        } else setErrorMessage(data?.message || `Login failed (${status})`);
-      } else if (error.request) {
-        setErrorMessage("No response from server. Is the backend running?");
-      } else {
-        setErrorMessage(error.message || "Login failed");
-      }
+      hardLogoutLocal();
+
+      const status = error?.response?.status;
+      const data = error?.response?.data;
+      const msg =
+        data?.message ||
+        data?.error ||
+        (typeof data === "string" ? data : null) ||
+        error.message ||
+        (status ? `Login failed (${status})` : "Login failed");
+
+      setErrorMessage(msg);
     } finally {
       setLoading(false);
     }
@@ -125,18 +137,12 @@ const LoginPage: React.FC = () => {
     <div className="login-page">
       <aside className="login-left">
         <div className="login-left-inner">
-          <img 
-            src={recycleImg} 
-            alt="Recycling illustration" 
-            className="login-illustration" 
-            draggable={false} 
-          />
+          <img src={recycleImg} alt="Recycling illustration" className="login-illustration" draggable={false} />
         </div>
       </aside>
 
       <main className="login-right">
         <div className="login-card">
-          {/* Brand icon */}
           <div className="login-brand">
             <div className="login-brand-icon">♻️</div>
           </div>
@@ -183,11 +189,7 @@ const LoginPage: React.FC = () => {
               </button>
             </div>
 
-            <button 
-              type="submit" 
-              className="login-button" 
-              disabled={loading}
-            >
+            <button type="submit" className="login-button" disabled={loading}>
               {loading ? (
                 <>
                   Logging in
@@ -199,21 +201,17 @@ const LoginPage: React.FC = () => {
             </button>
           </form>
 
-          {errorMessage && (
-            <div className="login-error">
-              {errorMessage}
-            </div>
-          )}
+          {errorMessage && <div className="login-error">{errorMessage}</div>}
 
           <p className="login-register-text">
             Don't have an account?{" "}
-            <span 
-              className="login-register-link" 
+            <span
+              className="login-register-link"
               onClick={() => navigate("/register")}
               role="button"
               tabIndex={0}
-              onKeyPress={(e) => {
-                if (e.key === 'Enter') navigate("/register");
+              onKeyDown={(e) => {
+                if (e.key === "Enter") navigate("/register");
               }}
             >
               Register here

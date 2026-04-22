@@ -3,40 +3,112 @@ import api from "../api";
 import CollectorSidebar from "../components/CollectorSidebar";
 import "./AvailablePickup.css";
 
-/* ─────────────────────────── Helpers ─────────────────────────── */
-function wasteEmoji(type?: string): string {
+/* ─────────────────────────── Small inline SVG icons ─────────────────────────── */
+const smallIconStyle: React.CSSProperties = { width: 16, height: 16, display: "inline-block", verticalAlign: "middle", marginRight: 8, flexShrink: 0 };
+
+const RefreshIcon: React.FC<{ spin?: boolean }> = ({ spin }) => (
+  <svg style={{ ...smallIconStyle, transform: spin ? "rotate(90deg)" : undefined }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M20 12a8 8 0 1 0-2.3 5.3" />
+    <polyline points="20 12 20 6 14 6" />
+  </svg>
+);
+
+const WarningIcon: React.FC = () => (
+  <svg style={{ width: 18, height: 18, marginRight: 8 }} viewBox="0 0 24 24" fill="none" stroke="#b91c1c" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+    <line x1="12" y1="9" x2="12" y2="13" />
+    <line x1="12" y1="17" x2="12" y2="17" />
+  </svg>
+);
+
+const InboxIcon: React.FC = () => (
+  <svg style={{ width: 36, height: 36, display: "block" }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6" />
+    <polyline points="7 10 12 15 17 10" />
+    <path d="M22 7H2V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z" />
+  </svg>
+);
+
+const PhoneIcon: React.FC = () => (
+  <svg style={smallIconStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.86 19.86 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.86 19.86 0 0 1 3.08 4.18 2 2 0 0 1 5 2h3a2 2 0 0 1 2 1.72c.12.9.37 1.77.73 2.6a2 2 0 0 1-.45 2.11L9.91 9.91a16 16 0 0 0 6 6l1.48-1.48a2 2 0 0 1 2.11-.45c.83.36 1.7.61 2.6.73A2 2 0 0 1 22 16.92z" />
+  </svg>
+);
+
+const PinIcon: React.FC = () => (
+  <svg style={smallIconStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M21 10c0 6-9 11-9 11S3 16 3 10a9 9 0 0 1 18 0z" />
+    <circle cx="12" cy="10" r="2.5" />
+  </svg>
+);
+
+/* Waste-type icons (replaces emoji) */
+function wasteIcon(type?: string): React.ReactNode {
   const t = (type ?? "").toLowerCase();
-  if (t.includes("plastic"))   return "♻️";
-  if (t.includes("paper"))     return "📄";
-  if (t.includes("metal"))     return "🔩";
-  if (t.includes("glass"))     return "🫙";
-  if (t.includes("organic") || t.includes("food")) return "🌿";
-  if (t.includes("e-waste") || t.includes("electronic")) return "💻";
-  return "🗑️";
-}
-
-/* ─────────────────────────── Types ─────────────────────────── */
-type UserRef = { _id?: string; name?: string; phone?: string; address?: string; email?: string };
-type Pickup = {
-  _id: string; user?: UserRef; wasteType?: string; quantity?: number;
-  status?: string; image?: string | null; imageUrl?: string | null; createdAt?: string; location?: string;
-  [k: string]: any;
-};
-
-const PAGE_SIZE       = 12;
-const DEV_FORCE_SAMPLE = false;
-
-/* Helper to avoid double "/api" when axios baseURL already includes /api */
-function apiPath(path: string) {
-  if (!path) return path;
-  if (!path.startsWith("/")) path = "/" + path;
-  const base = (api.defaults && (api.defaults.baseURL as string)) || "";
-  if (base.endsWith("/api") && path.startsWith("/api")) {
-    return path.replace(/^\/api/, "");
+  const baseProps = { width: 28, height: 28, viewBox: "0 0 24 24", fill: "none" as const, stroke: "currentColor", strokeWidth: 1.6, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  if (t.includes("plastic")) {
+    return (
+      <svg {...baseProps} aria-hidden>
+        <path d="M21 15v4h-4" />
+        <path d="M3 9v-4h4" />
+        <path d="M14 3l-2 4" />
+        <path d="M10 21l2-4" />
+      </svg>
+    );
   }
-  return path;
+  if (t.includes("paper")) {
+    return (
+      <svg {...baseProps} aria-hidden>
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+      </svg>
+    );
+  }
+  if (t.includes("metal")) {
+    return (
+      <svg {...baseProps} aria-hidden>
+        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+      </svg>
+    );
+  }
+  if (t.includes("glass")) {
+    return (
+      <svg {...baseProps} aria-hidden>
+        <path d="M7 21h10" />
+        <path d="M9 21V7a3 3 0 0 1 6 0v14" />
+        <path d="M9 7h6" />
+      </svg>
+    );
+  }
+  if (t.includes("organic") || t.includes("food")) {
+    return (
+      <svg {...baseProps} aria-hidden>
+        <path d="M21 7c0 7-9 13-9 13S3 13 3 6a9 9 0 0 1 18 1z" />
+        <path d="M8.5 10.5c2.2-1.8 4.2-2.1 6.5-2.4" />
+      </svg>
+    );
+  }
+  if (t.includes("e-waste") || t.includes("electronic") || t.includes("laptop") || t.includes("phone")) {
+    return (
+      <svg {...baseProps} aria-hidden>
+        <rect x="2" y="4" width="20" height="14" rx="2" />
+        <path d="M2 18h20" />
+      </svg>
+    );
+  }
+  // fallback
+  return (
+    <svg {...baseProps} aria-hidden>
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+      <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+    </svg>
+  );
 }
 
+/* ─────────────────────────── Helpers ─────────────────────────── */
 /* Resolve media URLs — prefer api.defaults.baseURL when provided */
 function resolveUrl(src?: string | null): string | null {
   if (!src) return null;
@@ -58,16 +130,38 @@ function resolveUrl(src?: string | null): string | null {
   return window.location.origin + "/" + s;
 }
 
+/* Helper to avoid double "/api" when axios baseURL already includes /api */
+function apiPath(path: string) {
+  if (!path) return path;
+  if (!path.startsWith("/")) path = "/" + path;
+  const base = (api.defaults && (api.defaults.baseURL as string)) || "";
+  if (base.endsWith("/api") && path.startsWith("/api")) {
+    return path.replace(/^\/api/, "");
+  }
+  return path;
+}
+
+/* ─────────────────────────── Types ─────────────────────────── */
+type UserRef = { _id?: string; name?: string; phone?: string; address?: string; email?: string };
+type Pickup = {
+  _id: string; user?: UserRef; wasteType?: string; quantity?: number;
+  status?: string; image?: string | null; imageUrl?: string | null; createdAt?: string; location?: string;
+  [k: string]: any;
+};
+
+const PAGE_SIZE = 12;
+const DEV_FORCE_SAMPLE = false;
+
 /* ─────────────────────────── Component ─────────────────────────── */
 export default function AvailablePickups(): JSX.Element {
-  const [items,        setItems]        = useState<Pickup[]>([]);
-  const [loading,      setLoading]      = useState<boolean>(true);
-  const [error,        setError]        = useState<string | null>(null);
-  const [statusCode,   setStatusCode]   = useState<number | null>(null);
-  const [rawResponse,  setRawResponse]  = useState<any>(null);
-  const [showRaw,      setShowRaw]      = useState(false);
+  const [items, setItems] = useState<Pickup[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [statusCode, setStatusCode] = useState<number | null>(null);
+  const [rawResponse, setRawResponse] = useState<any>(null);
+  const [showRaw, setShowRaw] = useState(false);
   const [assigningIds, setAssigningIds] = useState<Record<string, boolean>>({});
-  const [page,         setPage]         = useState(1);
+  const [page, setPage] = useState(1);
 
   const parseResponseToArray = (raw: any): any[] => {
     if (!raw) return [];
@@ -192,8 +286,9 @@ export default function AvailablePickups(): JSX.Element {
                 {!loading && !error && items.length > 0 && (
                   <span className="ap-count">{items.length} available</span>
                 )}
-                <button className="ap-btn" onClick={fetchAvailable} disabled={loading}>
-                  {loading ? "Refreshing…" : "↻ Refresh"}
+                <button className="ap-btn" onClick={fetchAvailable} disabled={loading} aria-label="Refresh available pickups">
+                  <RefreshIcon spin={loading} />
+                  {loading ? "Refreshing…" : "Refresh"}
                 </button>
               </div>
             </div>
@@ -203,8 +298,11 @@ export default function AvailablePickups(): JSX.Element {
 
             {/* ── Error ── */}
             {!loading && error && (
-              <div className="ap-error">
-                <div className="ap-error__msg">⚠ {error}</div>
+              <div className="ap-error" role="alert">
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <WarningIcon />
+                  <div className="ap-error__msg">{error}</div>
+                </div>
                 {statusCode && <div className="ap-error__code">HTTP {statusCode}</div>}
                 <div className="ap-error__actions">
                   <button className="ap-btn ap-btn--primary" onClick={fetchAvailable}>Retry</button>
@@ -228,8 +326,10 @@ export default function AvailablePickups(): JSX.Element {
 
             {/* ── Empty ── */}
             {!loading && !error && items.length === 0 && (
-              <div className="ap-empty">
-                <div className="ap-empty__icon">📭</div>
+              <div className="ap-empty" role="status">
+                <div className="ap-empty__icon" aria-hidden>
+                  <InboxIcon />
+                </div>
                 <div className="ap-empty__title">No pickups available right now</div>
                 <div className="ap-empty__sub">New requests will appear here automatically</div>
                 <button className="ap-btn ap-btn--primary" onClick={fetchAvailable} style={{ marginTop: 4 }}>
@@ -252,12 +352,14 @@ export default function AvailablePickups(): JSX.Element {
                                 src={resolveUrl(p.image ?? p.imageUrl) ?? (p.image ?? p.imageUrl ?? "")}
                                 alt={p.wasteType ?? "waste"}
                                 onError={(e) => {
-                                  // if image fails, remove it to let emoji fallback show
+                                  // if image fails, hide it so icon fallback shows
                                   (e.currentTarget as HTMLImageElement).style.display = "none";
                                 }}
                               />
                             ) : (
-                              <div style={{ fontSize: 20 }}>{wasteEmoji(p.wasteType)}</div>
+                              <div className="ap-waste-thumbnail__icon" aria-hidden>
+                                {wasteIcon(p.wasteType)}
+                              </div>
                             )}
                           </div>
 
@@ -274,7 +376,10 @@ export default function AvailablePickups(): JSX.Element {
                                 </span>
                               )}
                               {p.location && (
-                                <span className="ap-card__pill ap-card__pill--sep">📍 {p.location}</span>
+                                <span className="ap-card__pill ap-card__pill--sep" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                                  <PinIcon />
+                                  <span style={{ marginLeft: 0 }}>{p.location}</span>
+                                </span>
                               )}
                             </div>
                           </div>
@@ -287,14 +392,17 @@ export default function AvailablePickups(): JSX.Element {
                             className="ap-btn ap-btn--call ap-btn--sm"
                             href={p.user?.phone ? `tel:${p.user.phone}` : "#"}
                             onClick={(e) => { if (!p.user?.phone) { e.preventDefault(); alert("No phone number available"); } }}
+                            aria-label={p.user?.phone ? `Call ${p.user?.name ?? "user"}` : "No phone"}
                           >
-                            📞 Call
+                            <PhoneIcon />
+                            Call
                           </a>
 
                           <button
                             className="ap-btn ap-btn--primary ap-btn--sm"
                             onClick={() => claimPickup(p._id)}
                             disabled={!!assigningIds[p._id]}
+                            aria-label={`Assign pickup ${p._id} to me`}
                           >
                             {assigningIds[p._id] ? "Assigning…" : "Assign to me"}
                           </button>

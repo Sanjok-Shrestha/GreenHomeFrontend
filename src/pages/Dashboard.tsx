@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { FiRepeat, FiCheck, FiGift, FiClock, FiList, FiGlobe, FiAlertTriangle } from "react-icons/fi";
 import api from "../../api";
 import Sidebar from "../components/Sidebar";
 
@@ -380,6 +381,14 @@ const css = `
     from { background-position: 200% 0; }
     to   { background-position: -200% 0; }
   }
+
+  /* icon tweaks so react-icons inherit color/size nicely */
+  .icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: inherit;
+  }
 `;
 
 /* ─────────────────────────── Helpers ─────────────────────────── */
@@ -456,18 +465,10 @@ const Dashboard: React.FC = () => {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  /* ------------------ Environmental impact (dynamic) ------------------
-     Strategy:
-     - Recycled weight (kg): sum of `quantity` for items with status "collected"
-     - CO2 reduced (kg CO2): recycledKg * CO2_PER_KG (approximate factor)
-     - Trees saved (equivalent, per year): CO2 reduced / TREE_SEQUESTRATION_KG_PER_YEAR
-     Notes: These are simple estimates for display only. If you have
-     server-side metrics or different conversion factors, adjust constants below.
-  --------------------------------------------------------------------- */
+  /* Impact calculations */
   const IMPACT = useMemo(() => {
-    // constants (tweakable)
-    const CO2_PER_KG = 0.9; // estimated kg CO2 reduced per kg of recycled waste
-    const TREE_SEQUESTRATION_KG_PER_YEAR = 22; // approx kg CO2 sequestered by one tree per year
+    const CO2_PER_KG = 0.9;
+    const TREE_SEQUESTRATION_KG_PER_YEAR = 22;
 
     const recycledKg = wasteItems.reduce((sum, it) => {
       const q = Number(it.quantity ?? 0);
@@ -517,14 +518,18 @@ const Dashboard: React.FC = () => {
               <h1 className="db-welcome">Welcome back, {user?.name || "User"}!</h1>
               <p className="db-subtitle">Track your waste management and earn rewards</p>
             </div>
-            <div className="db-avatar">{(user?.name?.charAt(0) ?? "U").toUpperCase()}</div>
+            <div className="db-avatar" title={user?.name ?? "User"}>
+              {(user?.name?.charAt(0) ?? "U").toUpperCase()}
+            </div>
           </div>
 
           {/* ── Stats ── */}
           <div className="db-stats-grid" style={{ gridTemplateColumns: `repeat(${statsCols}, minmax(0,1fr))` }}>
 
             <div className="db-stat-card db-stat-card--green">
-              <div className="db-stat-icon">♻️</div>
+              <div className="db-stat-icon">
+                <FiRepeat className="icon" size={22} aria-hidden />
+              </div>
               <div>
                 <p className="db-stat-label">Total Waste Posted</p>
                 <h2 className="db-stat-value">{loading ? "—" : totalPosted}</h2>
@@ -535,7 +540,9 @@ const Dashboard: React.FC = () => {
             </div>
 
             <div className="db-stat-card db-stat-card--blue">
-              <div className="db-stat-icon">✅</div>
+              <div className="db-stat-icon">
+                <FiCheck className="icon" size={20} aria-hidden />
+              </div>
               <div>
                 <p className="db-stat-label">Pickups Completed</p>
                 <h2 className="db-stat-value">{loading ? "—" : completedCount}</h2>
@@ -544,7 +551,9 @@ const Dashboard: React.FC = () => {
             </div>
 
             <div className="db-stat-card db-stat-card--amber">
-              <div className="db-stat-icon">🎁</div>
+              <div className="db-stat-icon">
+                <FiGift className="icon" size={20} aria-hidden />
+              </div>
               <div>
                 <p className="db-stat-label">Reward Points</p>
                 <h2 className="db-stat-value">{points}</h2>
@@ -553,7 +562,9 @@ const Dashboard: React.FC = () => {
             </div>
 
             <div className="db-stat-card db-stat-card--red">
-              <div className="db-stat-icon">⏳</div>
+              <div className="db-stat-icon">
+                <FiClock className="icon" size={20} aria-hidden />
+              </div>
               <div>
                 <p className="db-stat-label">Pending Pickups</p>
                 <h2 className="db-stat-value">{loading ? "—" : pendingCount}</h2>
@@ -568,10 +579,10 @@ const Dashboard: React.FC = () => {
 
             {/* Recent activity */}
             <div className="db-card">
-              <h3 className="db-card-title">📋 Recent Activity</h3>
+              <h3 className="db-card-title"><FiList className="icon" style={{ marginRight: 8 }} />Recent Activity</h3>
 
               {loading ? <ActivitySkeleton /> : error ? (
-                <div className="db-error">⚠ {error}</div>
+                <div className="db-error"><FiAlertTriangle style={{ marginRight: 8 }} /> {error}</div>
               ) : recent.length === 0 ? (
                 <div className="db-muted">No recent activity yet.</div>
               ) : (
@@ -579,7 +590,9 @@ const Dashboard: React.FC = () => {
                   {recent.map((item) => (
                     <Link key={item._id} to={`/track/${item._id}`} style={{ textDecoration: "none" }}>
                       <div className="db-activity-item">
-                        <div className="db-activity-icon">♻️</div>
+                        <div className="db-activity-icon">
+                          <FiRepeat className="icon" size={16} aria-hidden />
+                        </div>
                         <div className="db-activity-content">
                           <span className="db-activity-link">
                             {(item.wasteType ?? "Waste").toUpperCase()} • {item.quantity ?? "—"} kg
@@ -600,7 +613,7 @@ const Dashboard: React.FC = () => {
 
             {/* Environmental impact */}
             <div className="db-card">
-              <h3 className="db-card-title">🌍 Environmental Impact</h3>
+              <h3 className="db-card-title"><FiGlobe className="icon" style={{ marginRight: 8 }} />Environmental Impact</h3>
               <div className="db-impact-grid">
                 <div className="db-impact-item">
                   <p className="db-impact-value">{loading ? "—" : `${IMPACT.recycledKg.toFixed(1)}kg`}</p>

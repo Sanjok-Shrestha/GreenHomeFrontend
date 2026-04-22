@@ -1,4 +1,3 @@
-// src/pages/MyPickups.tsx
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api";
@@ -17,6 +16,163 @@ type Waste = {
   [k: string]: any;
 };
 
+/* ── Small inline SVG icons (no external deps) ── */
+const IconStyle: React.CSSProperties = {
+  width: 18,
+  height: 18,
+  display: "inline-block",
+  verticalAlign: "middle",
+  marginRight: 8,
+  flexShrink: 0,
+};
+
+const RefreshIcon: React.FC<{ spin?: boolean }> = ({ spin }) => (
+  <svg
+    style={{ ...IconStyle, transform: spin ? "rotate(90deg)" : undefined }}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.6"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden
+  >
+    <path d="M20 12a8 8 0 1 0-2.3 5.3" />
+    <polyline points="20 12 20 6 14 6" />
+  </svg>
+);
+
+const WarningIcon: React.FC = () => (
+  <svg
+    style={IconStyle}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="#c0392b"
+    strokeWidth="1.6"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden
+  >
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+    <line x1="12" y1="9" x2="12" y2="13" />
+    <line x1="12" y1="17" x2="12" y2="17" />
+  </svg>
+);
+
+/* ── New alternative icons ── */
+
+/* Package / Box (for empty state) */
+const PackageIcon: React.FC = () => (
+  <svg
+    style={{ ...IconStyle, width: 40, height: 40, marginRight: 0 }}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.6"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden
+  >
+    <path d="M21 16V8a2 2 0 0 0-1-1.73L12 2.27a2 2 0 0 0-2 0L4 6.27A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73L11 21.73a2 2 0 0 0 2 0l7-4.99A2 2 0 0 0 21 16z" />
+    <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+    <line x1="12" y1="12" x2="12" y2="22" />
+  </svg>
+);
+
+/* Truck icon (for thumbnail fallback) */
+const TruckIcon: React.FC = () => (
+  <svg
+    style={{ ...IconStyle, width: 28, height: 28, marginRight: 0 }}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.6"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden
+  >
+    <rect x="1" y="3" width="15" height="13" rx="2" />
+    <path d="M16 8h5l2 4v5" />
+    <circle cx="5.5" cy="19.5" r="1.5" />
+    <circle cx="18.5" cy="19.5" r="1.5" />
+  </svg>
+);
+
+/* Pin / location icon */
+const PinIcon: React.FC = () => (
+  <svg
+    style={IconStyle}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.6"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden
+  >
+    <path d="M21 10c0 6-9 11-9 11S3 16 3 10a9 9 0 0 1 18 0z" />
+    <circle cx="12" cy="10" r="2.5" />
+  </svg>
+);
+
+/* Calendar-alt icon (alternative to simple calendar) */
+const CalendarAltIcon: React.FC = () => (
+  <svg
+    style={IconStyle}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.6"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden
+  >
+    <rect x="3" y="4" width="18" height="18" rx="2" />
+    <line x1="16" y1="2" x2="16" y2="6" />
+    <line x1="8" y1="2" x2="8" y2="6" />
+    <rect x="7" y="11" width="3" height="3" />
+    <rect x="14" y="11" width="3" height="3" />
+  </svg>
+);
+
+/* Link / chain icon for copy link button */
+const LinkIcon: React.FC = () => (
+  <svg
+    style={IconStyle}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.6"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden
+  >
+    <path d="M10 13a5 5 0 0 0 7 0l1-1a5 5 0 0 0-7-7l-1 1" />
+    <path d="M14 11a5 5 0 0 0-7 0l-1 1a5 5 0 0 0 7 7l1-1" />
+  </svg>
+);
+
+/* Trash / fallback icon (alternative) */
+const BinIcon: React.FC = () => (
+  <svg
+    style={{ ...IconStyle, width: 20, height: 20 }}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.6"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden
+  >
+    <polyline points="3 6 5 6 21 6" />
+    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+    <path d="M10 11v6" />
+    <path d="M14 11v6" />
+    <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+  </svg>
+);
+
+/* ── Component ── */
 export default function MyPickups(): React.JSX.Element {
   const [items, setItems] = useState<Waste[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,7 +181,8 @@ export default function MyPickups(): React.JSX.Element {
   const [dateValue, setDateValue] = useState<string>("");
 
   const fetchItems = async () => {
-    setLoading(true); setError(null);
+    setLoading(true);
+    setError(null);
     try {
       const res = await api.get("/waste/my-posts");
       const data = res.data?.data ?? res.data ?? [];
@@ -37,32 +194,46 @@ export default function MyPickups(): React.JSX.Element {
     }
   };
 
-  useEffect(() => { fetchItems(); }, []);
+  useEffect(() => {
+    fetchItems();
+  }, []);
 
   const startSchedule = (id: string, current?: string | null) => {
     setEditingId(id);
     if (current) {
       const d = new Date(current);
-      const localISO = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      const localISO = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+        .toISOString()
+        .slice(0, 16);
       setDateValue(localISO);
     } else {
       setDateValue("");
     }
   };
 
-  const cancelEdit = () => { setEditingId(null); setDateValue(""); };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setDateValue("");
+  };
 
   const saveSchedule = async (id: string) => {
-    if (!dateValue) { alert("Please choose date/time"); return; }
+    if (!dateValue) {
+      alert("Please choose date/time");
+      return;
+    }
     try {
-      await api.put(`/waste/schedule/${id}`, { pickupDate: new Date(dateValue).toISOString() });
+      await api.put(`/waste/schedule/${id}`, {
+        pickupDate: new Date(dateValue).toISOString(),
+      });
       await fetchItems();
-      setEditingId(null); setDateValue("");
+      setEditingId(null);
+      setDateValue("");
       showToast("Scheduled ✓");
     } catch (err: any) {
       alert(err?.response?.data?.message || "Failed to schedule");
       await fetchItems();
-      setEditingId(null); setDateValue("");
+      setEditingId(null);
+      setDateValue("");
     }
   };
 
@@ -70,19 +241,32 @@ export default function MyPickups(): React.JSX.Element {
     const n = document.createElement("div");
     n.textContent = text;
     Object.assign(n.style, {
-      position: "fixed", right: "18px", bottom: "22px",
-      background: "#1a6b45", color: "#fff",
-      padding: "9px 14px", borderRadius: "9px",
-      fontSize: "13px", fontWeight: "500", zIndex: "9999",
+      position: "fixed",
+      right: "18px",
+      bottom: "22px",
+      background: "#1a6b45",
+      color: "#fff",
+      padding: "9px 14px",
+      borderRadius: "9px",
+      fontSize: "13px",
+      fontWeight: "500",
+      zIndex: "9999",
       boxShadow: "0 4px 16px rgba(26,107,69,0.25)",
     });
     document.body.appendChild(n);
-    setTimeout(() => { try { document.body.removeChild(n); } catch {} }, ttl);
+    setTimeout(() => {
+      try {
+        document.body.removeChild(n);
+      } catch {}
+    }, ttl);
   };
 
+  // Show pending + scheduled + picked
+  // Hide only final/closed states
+  const hiddenStatuses = new Set(["collected", "completed", "cancelled"]);
   const visible = items.filter((w) => {
-    const s = (w.status ?? "").toString().toLowerCase();
-    return s === "pending" || s === "scheduled";
+    const s = (w.status ?? "").toString().trim().toLowerCase();
+    return !hiddenStatuses.has(s);
   });
 
   return (
@@ -92,34 +276,81 @@ export default function MyPickups(): React.JSX.Element {
         <Sidebar />
         <main className="mp-main">
           <div className="mp-inner">
-
             {/* Header */}
             <div className="mp-header">
               <div>
-                <h2 className="mp-title">Pickup Status</h2>
-                <p className="mp-sub">Manage your posted waste and schedule pickups</p>
+                <h2 id="rc-user-title" className="mp-title">
+                  Pickup Status
+                </h2>
+                <p className="mp-sub">
+                  Manage your posted waste and schedule pickups
+                </p>
               </div>
               <div className="mp-header__right">
-                <Link to="/post-waste" className="mp-btn mp-btn--primary">+ Post waste</Link>
-                <button onClick={fetchItems} className="mp-btn" disabled={loading}>
-                  {loading ? "Loading…" : "↻ Refresh"}
+                <Link to="/post-waste" className="mp-btn mp-btn--primary">
+                  + Post waste
+                </Link>
+                <button
+                  onClick={fetchItems}
+                  className="mp-btn"
+                  disabled={loading}
+                  aria-label="Refresh pickups"
+                >
+                  {loading ? (
+                    <>
+                      <RefreshIcon spin />
+                      Refreshing…
+                    </>
+                  ) : (
+                    <>
+                      <RefreshIcon />
+                      Refresh
+                    </>
+                  )}
                 </button>
-                <Link to="/my-pickups/history" className="mp-link">View history →</Link>
               </div>
             </div>
 
             {/* Loading */}
             {loading && (
               <div className="mp-list">
-                {[0,1,2,3].map(i => (
-                  <div key={i} className="mp-skeleton-card" style={{ animationDelay: `${i * 60}ms` }}>
-                    <div className="mp-skel" style={{ width: 52, height: 52, borderRadius: 10, flexShrink: 0 }} />
+                {[0, 1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="mp-skeleton-card"
+                    style={{ animationDelay: `${i * 60}ms` }}
+                  >
+                    <div
+                      className="mp-skel"
+                      style={{
+                        width: 52,
+                        height: 52,
+                        borderRadius: 10,
+                        flexShrink: 0,
+                      }}
+                    />
                     <div style={{ flex: 1 }}>
-                      <div className="mp-skel" style={{ height: 13, width: "30%", marginBottom: 8 }} />
-                      <div className="mp-skel" style={{ height: 11, width: "50%", marginBottom: 8 }} />
-                      <div className="mp-skel" style={{ height: 28, width: "60%", borderRadius: 8 }} />
+                      <div
+                        className="mp-skel"
+                        style={{ height: 13, width: "30%", marginBottom: 8 }}
+                      />
+                      <div
+                        className="mp-skel"
+                        style={{ height: 11, width: "50%", marginBottom: 8 }}
+                      />
+                      <div
+                        className="mp-skel"
+                        style={{
+                          height: 28,
+                          width: "60%",
+                          borderRadius: 8,
+                        }}
+                      />
                     </div>
-                    <div className="mp-skel" style={{ width: 52, height: 20, borderRadius: 6 }} />
+                    <div
+                      className="mp-skel"
+                      style={{ width: 52, height: 20, borderRadius: 6 }}
+                    />
                   </div>
                 ))}
               </div>
@@ -128,18 +359,30 @@ export default function MyPickups(): React.JSX.Element {
             {/* Error */}
             {!loading && error && (
               <div className="mp-error">
-                <span>⚠ {error}</span>
-                <button className="mp-btn mp-btn--primary" onClick={fetchItems}>Retry</button>
+                <WarningIcon />
+                <span style={{ flex: 1 }}>{error}</span>
+                <button className="mp-btn mp-btn--primary" onClick={fetchItems}>
+                  Retry
+                </button>
               </div>
             )}
 
             {/* Empty */}
             {!loading && !error && visible.length === 0 && (
               <div className="mp-empty">
-                <div className="mp-empty__icon">📦</div>
+                <div className="mp-empty__icon" aria-hidden>
+                  <PackageIcon />
+                </div>
                 <div className="mp-empty__title">No pending pickups</div>
-                <div className="mp-empty__sub">Posts you've made will appear here</div>
-                <Link to="/post-waste" className="mp-btn mp-btn--primary" style={{ marginTop: 8 }}>
+                <div className="mp-empty__sub">
+                  Posts you've made will appear here until a collector picks them
+                  up
+                </div>
+                <Link
+                  to="/post-waste"
+                  className="mp-btn mp-btn--primary"
+                  style={{ marginTop: 8 }}
+                >
                   + Post waste
                 </Link>
               </div>
@@ -147,16 +390,22 @@ export default function MyPickups(): React.JSX.Element {
 
             {/* List */}
             {!loading && !error && visible.length > 0 && (
-              <div className="mp-list">
+              <div className="mp-list" aria-label="My pickups">
                 {visible.map((w, idx) => (
-                  <div key={w._id} className="mp-card" style={{ animationDelay: `${Math.min(idx * 35, 280)}ms` }}>
-
+                  <div
+                    key={w._id}
+                    className="mp-card"
+                    style={{ animationDelay: `${Math.min(idx * 35, 280)}ms` }}
+                  >
                     {/* Thumbnail */}
                     <div className="mp-thumb">
-                      {w.imageUrl
-                        ? <Thumbnail imageUrl={w.imageUrl} />
-                        : <span className="mp-thumb__fallback">🗑️</span>
-                      }
+                      {w.imageUrl ? (
+                        <Thumbnail imageUrl={w.imageUrl} />
+                      ) : (
+                        <span className="mp-thumb__fallback" aria-hidden>
+                          <TruckIcon />
+                        </span>
+                      )}
                     </div>
 
                     {/* Meta */}
@@ -168,57 +417,98 @@ export default function MyPickups(): React.JSX.Element {
                         <span className="mp-pill">{w.quantity ?? "—"} kg</span>
                         <span className="mp-pill mp-pill--muted">
                           {w.createdAt
-                            ? new Date(w.createdAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })
+                            ? new Date(w.createdAt).toLocaleDateString(
+                                undefined,
+                                {
+                                  day: "numeric",
+                                  month: "short",
+                                  year: "numeric",
+                                }
+                              )
                             : "—"}
                         </span>
-                        <span className={`mp-badge mp-badge--${(w.status ?? "pending").toLowerCase()}`}>
+                        <span
+                          className={`mp-badge mp-badge--${(w.status ?? "pending")
+                            .toLowerCase()
+                            .trim()}`}
+                        >
                           {w.status ?? "pending"}
                         </span>
                       </div>
 
                       {w.pickupDate && (
                         <div className="mp-scheduled">
-                          📅 Scheduled: {new Date(w.pickupDate).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                          <CalendarAltIcon />
+                          <PinIcon />
+                          <span>
+                            Scheduled:{" "}
+                            {new Date(w.pickupDate).toLocaleDateString(
+                              undefined,
+                              {
+                                day: "numeric",
+                                month: "short",
+                                year: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              }
+                            )}
+                          </span>
                         </div>
                       )}
 
                       {/* Actions */}
                       <div className="mp-card__actions">
-                        <Link to={`/track/${w._id}`} className="mp-action-btn">View</Link>
+                        <Link to={`/track/${w._id}`} className="mp-action-btn">
+                          View
+                        </Link>
 
                         {editingId === w._id ? (
                           <>
                             <input
                               type="datetime-local"
                               value={dateValue}
-                              onChange={e => setDateValue(e.target.value)}
+                              onChange={(e) => setDateValue(e.target.value)}
                               className="mp-date-input"
                             />
-                            <button onClick={() => saveSchedule(w._id)} className="mp-action-btn mp-action-btn--save">
+                            <button
+                              onClick={() => saveSchedule(w._id)}
+                              className="mp-action-btn mp-action-btn--save"
+                            >
                               Save
                             </button>
-                            <button onClick={cancelEdit} className="mp-action-btn">
+                            <button
+                              onClick={cancelEdit}
+                              className="mp-action-btn"
+                            >
                               Cancel
                             </button>
                           </>
                         ) : (
                           <>
                             <button
-                              onClick={() => startSchedule(w._id, w.pickupDate ?? null)}
+                              onClick={() =>
+                                startSchedule(w._id, w.pickupDate ?? null)
+                              }
                               className="mp-action-btn"
                             >
                               {w.pickupDate ? "Reschedule" : "Schedule"}
                             </button>
                             <button
                               onClick={() => {
-                                navigator.clipboard?.writeText(window.location.origin + `/track/${w._id}`);
+                                navigator.clipboard?.writeText(
+                                  window.location.origin + `/track/${w._id}`
+                                );
                                 showToast("Link copied");
                               }}
                               className="mp-action-btn"
                             >
+                              <LinkIcon />
                               Copy link
                             </button>
-                            <Link to="/post-waste" className="mp-action-btn mp-action-btn--ghost">
+                            <Link
+                              to="/post-waste"
+                              className="mp-action-btn mp-action-btn--ghost"
+                            >
                               Post similar
                             </Link>
                           </>
@@ -228,14 +518,17 @@ export default function MyPickups(): React.JSX.Element {
 
                     {/* Price */}
                     <div className="mp-card__right">
-                      <div className="mp-price">Rs {w.price != null ? Number(w.price).toLocaleString() : "—"}</div>
+                      <div className="mp-price">
+                        Rs{" "}
+                        {w.price != null
+                          ? Number(w.price).toLocaleString()
+                          : "—"}
+                      </div>
                     </div>
-
                   </div>
                 ))}
               </div>
             )}
-
           </div>
         </main>
       </div>
@@ -271,7 +564,7 @@ function Thumbnail({ imageUrl }: { imageUrl?: string | null }) {
     }
 
     const seen = new Set<string>();
-    const uniq = candidates.filter(c => {
+    const uniq = candidates.filter((c) => {
       const k = c.replace(/\/+/g, "/");
       return seen.has(k) ? false : (seen.add(k), true);
     });
@@ -282,31 +575,68 @@ function Thumbnail({ imageUrl }: { imageUrl?: string | null }) {
         try {
           if (/^https?:\/\//i.test(cand)) {
             let apiOrigin = window.location.origin;
-            try { if (typeof api.defaults.baseURL === "string") apiOrigin = new URL(api.defaults.baseURL).origin; } catch {}
+            try {
+              if (typeof api.defaults.baseURL === "string")
+                apiOrigin = new URL(api.defaults.baseURL).origin;
+            } catch {}
             const candUrl = new URL(cand);
             if (candUrl.origin === apiOrigin) {
-              const resp = await api.get(candUrl.pathname + (candUrl.search || ""), { responseType: "blob" });
+              const resp = await api.get(
+                candUrl.pathname + (candUrl.search || ""),
+                { responseType: "blob" }
+              );
               objectUrl = URL.createObjectURL(resp.data);
-              if (mounted) { setSrc(objectUrl); return; }
+              if (mounted) {
+                setSrc(objectUrl);
+                return;
+              }
             } else {
-              if (mounted) { setSrc(cand); return; }
+              if (mounted) {
+                setSrc(cand);
+                return;
+              }
             }
           } else {
-            const resp = await api.get(cand.startsWith("/") ? cand : "/" + cand, { responseType: "blob" });
+            const resp = await api.get(cand.startsWith("/") ? cand : "/" + cand, {
+              responseType: "blob",
+            });
             objectUrl = URL.createObjectURL(resp.data);
-            if (mounted) { setSrc(objectUrl); return; }
+            if (mounted) {
+              setSrc(objectUrl);
+              return;
+            }
           }
-        } catch { continue; }
+        } catch {
+          continue;
+        }
       }
       if (mounted) setErr(true);
     }
 
     tryCandidates();
-    return () => { mounted = false; if (objectUrl) try { URL.revokeObjectURL(objectUrl); } catch {} };
+    return () => {
+      mounted = false;
+      if (objectUrl)
+        try {
+          URL.revokeObjectURL(objectUrl);
+        } catch {}
+    };
   }, [imageUrl]);
 
-  if (err || !src) return <span className="mp-thumb__fallback">🗑️</span>;
-  return <img src={src} alt="waste" className="mp-thumb__img" onError={() => setErr(true)} />;
+  if (err || !src)
+    return (
+      <span className="mp-thumb__fallback" aria-hidden>
+        <BinIcon />
+      </span>
+    );
+  return (
+    <img
+      src={src}
+      alt="waste"
+      className="mp-thumb__img"
+      onError={() => setErr(true)}
+    />
+  );
 }
 
 /* ── CSS ── */
@@ -378,7 +708,7 @@ const css = `
     gap: 5px;
     padding: 7px 14px;
     border-radius: 8px;
-    border: 1px solid #dde8e2;
+    border:  1px solid #dde8e2;
     background: #ffffff;
     color: #2a3d31;
     font-size: 13px;
@@ -440,7 +770,7 @@ const css = `
     width: 100%; height: 100%;
     object-fit: cover; border-radius: 9px; display: block;
   }
-  .mp-thumb__fallback { font-size: 20px; line-height: 1; }
+  .mp-thumb__fallback { font-size: 20px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
 
   /* ── Card meta ── */
   .mp-card__meta {
@@ -508,7 +838,7 @@ const css = `
     padding: 5px 10px;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
     width: fit-content;
   }
 
@@ -608,7 +938,7 @@ const css = `
     gap: 8px;
     text-align: center;
   }
-  .mp-empty__icon { font-size: 34px; margin-bottom: 4px; line-height: 1; }
+  .mp-empty__icon { margin-bottom: 4px; line-height: 1; display:flex; align-items:center; justify-content:center; width:48px; height:48px; }
   .mp-empty__title { font-size: 15px; font-weight: 500; color: #1a3326; }
   .mp-empty__sub { font-size: 13px; color: #6b7f73; }
 

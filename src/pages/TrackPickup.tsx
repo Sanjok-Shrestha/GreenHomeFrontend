@@ -1,4 +1,3 @@
-// src/pages/TrackPickup.tsx
 import React, { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline, Circle } from "react-leaflet";
@@ -9,12 +8,11 @@ import CollectorSidebar from "../components/CollectorSidebar";
 import AdminSidebar from "../components/AdminSidebar";
 import api from "../api";
 import { io as ioClient, type Socket } from "socket.io-client";
+import "./Trackpickup.css";
 
-/* ─────────────────────────── Styles ─────────────────────────── */
 /* Paste your full CSS string here (same as you used before). For brevity I assume you keep the same css variable defined previously. */
 const css = `/* (copy your existing CSS here) */`;
 
-/* ---------- types + helpers (same as before) ---------- */
 type Pickup = {
   _id?: string;
   wasteType?: string;
@@ -104,6 +102,41 @@ function resolveUrl(src?: string | null): string | null {
   return window.location.origin + "/" + s;
 }
 
+/* ─────────────────────────── Small inline SVG icons ─────────────────────────── */
+const smallIconStyle: React.CSSProperties = { width: 16, height: 16, display: "inline-block", verticalAlign: "middle", marginRight: 8, flexShrink: 0 };
+
+const PinIcon: React.FC = () => (
+  <svg style={smallIconStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M21 10c0 6-9 11-9 11S3 16 3 10a9 9 0 0 1 18 0z" />
+    <circle cx="12" cy="10" r="2.5" />
+  </svg>
+);
+
+const WarningIcon: React.FC = () => (
+  <svg style={smallIconStyle} viewBox="0 0 24 24" fill="none" stroke="#b91c1c" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+    <line x1="12" y1="9" x2="12" y2="13" />
+    <line x1="12" y1="17" x2="12" y2="17" />
+  </svg>
+);
+
+const LocationDotIcon: React.FC = () => (
+  <svg style={smallIconStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <circle cx="12" cy="12" r="3" />
+    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
+  </svg>
+);
+
+/* Helper: decide whether live location should be shown (collector has picked / assigned) */
+function isPickedStatus(status?: string, collector?: any) {
+  if (!status) return Boolean(collector);
+  const s = String(status).toLowerCase();
+  if (s.includes("picked") || s.includes("picked up") || s.includes("in transit") || s.includes("on the way")) return true;
+  // treat assigned with collector present as live-ready
+  if (s.includes("assigned") && collector) return true;
+  return false;
+}
+
 /* ─────────────────────────── Component ─────────────────────────── */
 const TrackPickup: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -119,6 +152,9 @@ const TrackPickup: React.FC = () => {
   const [lastSeen, setLastSeen] = useState<number | null>(null);
   const [geoBlocked, setGeoBlocked] = useState(false);
   const [isMobile, setIsMobile] = useState(() => (typeof window !== "undefined" ? window.innerWidth < 900 : false));
+
+  // whether live location should be shown (collector picked / assigned)
+  const [showLive, setShowLive] = useState(false);
 
   const markerRef = useRef<L.Marker | null>(null);
   const pollRef = useRef<number | null>(null);
@@ -148,11 +184,11 @@ const TrackPickup: React.FC = () => {
       })
       .catch(() => {});
     return () => {
-      // nothing
+      mounted = false;
     };
   }, []);
 
-  // fetch + polling (keeps existing behavior)
+  // fetch + polling
   useEffect(() => {
     if (!id) {
       setError("No pickup id provided");
@@ -186,7 +222,27 @@ const TrackPickup: React.FC = () => {
           return;
         }
 
+        const statusStr = String(body.status ?? "").toLowerCase();
+        const picked = isPickedStatus(statusStr, body.collector);
+
+        // update pickup object
         if (mounted) setPickup(body as Pickup);
+
+        // If not picked yet: hide live location and clear existing position/path
+        if (!picked) {
+          if (mounted) {
+            setShowLive(false);
+            setPosition(null);
+            setPath([]);
+            setLastSeen(null);
+            setLoading(false);
+          }
+          // still return early — we won't try to geocode or attach position
+          return;
+        }
+
+        // picked === true => enable live behavior
+        if (mounted) setShowLive(true);
 
         const latVal =
           (body.location && (body.location.lat ?? body.location.latitude ?? body.location.latitude_deg)) ??
@@ -214,6 +270,7 @@ const TrackPickup: React.FC = () => {
           return;
         }
 
+        // If no coords but we are in live mode, try geocode address
         const address = body.address ?? body.location?.address ?? null;
         if (address) {
           try {
@@ -232,8 +289,11 @@ const TrackPickup: React.FC = () => {
           }
         }
 
-        setPosition(null);
-        if (mounted) setLoading(false);
+        // If picked but no coords, clear position and keep showLive true (waiting for updates)
+        if (mounted) {
+          setPosition(null);
+          setLoading(false);
+        }
       } catch (err: any) {
         console.error("[TrackPickup] fetch error:", err);
         if (err?.response) setError(`Server error: ${err.response.status} ${err.response?.data?.message ?? ""}`);
@@ -254,9 +314,19 @@ const TrackPickup: React.FC = () => {
     };
   }, [id]);
 
-  // socket subscription for live updates (preferred)
+  // socket subscription for live updates — only when showLive === true
   useEffect(() => {
     if (!id) return;
+    if (!showLive) {
+      // ensure socket disconnected if it existed
+      try {
+        socketRef.current?.emit("leave-waste-room", id);
+        socketRef.current?.disconnect();
+      } catch {}
+      socketRef.current = null;
+      return;
+    }
+
     let socket: Socket | null = null;
     try {
       const token = localStorage.getItem("accessToken") || localStorage.getItem("token") || "";
@@ -307,7 +377,7 @@ const TrackPickup: React.FC = () => {
       } catch {}
       socketRef.current = null;
     };
-  }, [id]);
+  }, [id, showLive]);
 
   // image loader
   useEffect(() => {
@@ -391,7 +461,7 @@ const TrackPickup: React.FC = () => {
       (p) => {
         const pos = clampToBounds(p.coords.latitude, p.coords.longitude);
         setUserLoc(pos);
-        if (!position) setPosition(pos);
+        if (!position && showLive) setPosition(pos);
       },
       (err: GeolocationPositionError) => {
         if (err.code === err.PERMISSION_DENIED) setGeoBlocked(true);
@@ -430,7 +500,10 @@ const TrackPickup: React.FC = () => {
         <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg)" }}>
           <SidebarToRender />
           <main className="tp-page" style={{ flex: 1 }}>
-            <div className="tp-error">⚠ {error}</div>
+            <div className="tp-error" role="alert" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <WarningIcon />
+              <span>{error}</span>
+            </div>
           </main>
         </div>
       </>
@@ -486,8 +559,9 @@ const TrackPickup: React.FC = () => {
                 <button className={`tp-btn ${following ? "tp-btn--active" : ""}`} onClick={() => setFollowing((s) => !s)}>
                   {following ? "● Following" : "Follow"}
                 </button>
-                <button className="tp-btn tp-btn--primary" onClick={requestUserLocation}>
-                  📍 My location
+                <button className="tp-btn tp-btn--primary" onClick={requestUserLocation} aria-label="Use my location">
+                  <LocationDotIcon />
+                  My location
                 </button>
               </div>
             </div>
@@ -550,18 +624,20 @@ const TrackPickup: React.FC = () => {
               </div>
 
               <div className="tp-map-area">
-                {lastSeen && (
+                {lastSeen && showLive && (
                   <div className="tp-poll-indicator">
                     <div className="tp-poll-dot" />
                     Live · updated {lastSeenText}
                   </div>
                 )}
 
-                <div className="tp-map-wrapper">
+                <div className="tp-map-wrapper" style={{ minHeight: 320 }}>
+                  {/* Show map always so user can pan/zoom, but only render live marker when showLive is true.
+                      If you prefer to hide map entirely until picked, move the MapContainer inside the conditional below. */}
                   <MapContainer center={mapCenter} zoom={mapZoom} style={{ height: "100%", width: "100%" }} scrollWheelZoom={false} maxBounds={NEPAL_BOUNDS} maxBoundsViscosity={0.8}>
                     <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
-                    {position && (
+                    {showLive && position && (
                       <>
                         <Marker
                           position={position}
@@ -586,23 +662,34 @@ const TrackPickup: React.FC = () => {
                   </MapContainer>
                 </div>
 
-                {!position && (
+                {!showLive && (
                   <div className="tp-no-map">
                     <div className="tp-no-map__title">No live location available</div>
-                    {pickup?.address && <div className="tp-no-map__address">📍 {pickup.address}</div>}
+                    {pickup?.address && (
+                      <div className="tp-no-map__address" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <PinIcon />
+                        <span>{pickup.address}</span>
+                      </div>
+                    )}
 
                     {geoBlocked ? (
                       <div className="tp-geo-blocked">
                         Geolocation is blocked in your browser. Enable it in site settings (click the lock icon near the URL bar).
                         <div style={{ marginTop: 10 }}>
                           <button className="tp-btn" onClick={() => navigator.clipboard?.writeText(window.location.href)}>
+                            {/* small link icon */}
+                            <svg style={smallIconStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                              <path d="M10 13a5 5 0 0 0 7 0l1-1a5 5 0 0 0-7-7l-1 1" />
+                              <path d="M14 11a5 5 0 0 0-7 0l-1 1a5 5 0 0 0 7 7l1-1" />
+                            </svg>
                             Copy tracking link
                           </button>
                         </div>
                       </div>
                     ) : (
                       <button className="tp-btn tp-btn--primary" onClick={requestUserLocation}>
-                        📍 Use my location
+                        <LocationDotIcon />
+                        Use my location
                       </button>
                     )}
                   </div>

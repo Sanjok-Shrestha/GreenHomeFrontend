@@ -442,7 +442,6 @@ const GLOBAL_CSS = `
     border: 1px solid rgba(255,255,255,0.15) !important;
     padding: 7px 13px; border-radius: var(--r-sm);
     font-size: 12.5px;
-    backdrop-filter: blur(4px);
   }
   .btn-hero:hover { background: rgba(255,255,255,0.16); }
 
@@ -576,10 +575,18 @@ function InfoRow({ label, value, action, onAction }: {
   label: string; value?: React.ReactNode;
   action?: string; onAction?: () => void;
 }) {
+  // Consider a value present unless it's null/undefined or an empty string.
+  const hasValue =
+    value !== undefined &&
+    value !== null &&
+    !(typeof value === "string" && value.trim() === "");
+
   return (
     <div className="pp-info-row">
       <span className="pp-info-label">{label}</span>
-      <span className="pp-info-val">{value || <span style={{ color: "var(--text-muted)" }}>—</span>}</span>
+      <span className="pp-info-val">
+        {hasValue ? value : <span style={{ color: "var(--text-muted)" }}>—</span>}
+      </span>
       {action && onAction && <button className="pp-info-action" onClick={onAction}>{action}</button>}
     </div>
   );
@@ -640,12 +647,34 @@ function ProfileSkeleton() {
 }
 
 /* ========== push subscription hook (uses notifications endpoints) ========== */
+/*
+  IMPORTANT: push is opt-in via REACT_APP_ENABLE_PUSH=1.
+  Default (no env or not set to "1") -> push calls are skipped (no network requests).
+*/
 function usePushSubscription(userId?: string) {
   const [pushEnabled, setPushEnabled] = useState(false);
   const [checkingPush, setCheckingPush] = useState(false);
 
+  // Safe env detection (works with Vite import.meta.env or globalThis.process.env if present).
+  const pushEnabledViaEnv = (() => {
+    try {
+      const maybeImportMeta = (typeof (import.meta as any) !== "undefined") ? (import.meta as any).env : undefined;
+      if (maybeImportMeta && typeof maybeImportMeta.REACT_APP_ENABLE_PUSH !== "undefined") {
+        return String(maybeImportMeta.REACT_APP_ENABLE_PUSH) === "1";
+      }
+      const maybeProcessEnv = (globalThis as any)?.process?.env;
+      if (maybeProcessEnv && typeof maybeProcessEnv.REACT_APP_ENABLE_PUSH !== "undefined") {
+        return String(maybeProcessEnv.REACT_APP_ENABLE_PUSH) === "1";
+      }
+    } catch {
+      // ignore
+    }
+    return false;
+  })();
+
+  // If push is NOT enabled via env, early-return inert API (no network calls).
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || !pushEnabledViaEnv) return;
     let cancelled = false;
     (async () => {
       setCheckingPush(true);
@@ -654,27 +683,41 @@ function usePushSubscription(userId?: string) {
           const reg = await navigator.serviceWorker.getRegistration();
           if (reg) {
             const sub = await reg.pushManager.getSubscription();
-            if (sub && !cancelled) { setPushEnabled(true); return; }
+            if (sub && !cancelled) { setPushEnabled(true); setCheckingPush(false); return; }
           }
         }
-        const res = await api.get("/notifications/push-subscription/exists");
-        if (!cancelled && res.data?.exists) setPushEnabled(true);
-      } catch { /* optional */ } finally {
+
+        const res = await api.get("/notifications/push-subscription/exists", {
+          validateStatus: (status) => status < 500 // allow 404/4xx through so it doesn't throw
+        });
+
+        if (!cancelled && res.status === 200 && res.data?.exists) {
+          setPushEnabled(true);
+        }
+      } catch (err: any) {
+        // Keep quiet for expected missing endpoints; warn for other issues.
+        console.warn("push check failed", err?.message ?? err);
+      } finally {
         if (!cancelled) setCheckingPush(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [userId]);
+  }, [userId, pushEnabledViaEnv]);
 
   const enable = useCallback(async (toast: (m: string) => void) => {
+    if (!pushEnabledViaEnv) { toast("Push not enabled in this build"); return; }
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
       toast("Push not supported"); return;
     }
     try {
       const reg = await navigator.serviceWorker.register("/sw.js");
       if ((await Notification.requestPermission()) !== "granted") { toast("Permission denied"); return; }
-      const res = await api.get("/notifications/vapidPublicKey");
-      if (!res.data?.key) { toast("VAPID key unavailable"); return; }
+
+      const res = await api.get("/notifications/vapidPublicKey", {
+        validateStatus: (status) => status < 500
+      });
+      if (res.status !== 200 || !res.data?.key) { toast("VAPID key unavailable"); return; }
+
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(res.data.key),
@@ -682,14 +725,15 @@ function usePushSubscription(userId?: string) {
       await api.post("/notifications/push-subscription", { subscription: sub });
       setPushEnabled(true); toast("Browser notifications enabled");
     } catch (err) {
-      console.error("enable push error", err);
+      console.warn("enable push error", err);
       toast("Failed to enable notifications");
     }
-  }, []);
+  }, [pushEnabledViaEnv]);
 
   const disable = useCallback(async (toast: (m: string) => void) => {
+    if (!pushEnabledViaEnv) { toast("Push not enabled in this build"); return; }
     try {
-      await api.delete("/notifications/push-subscription");
+      await api.delete("/notifications/push-subscription", { validateStatus: (s) => s < 500 });
       const reg = await navigator.serviceWorker.getRegistration();
       if (reg) {
         const sub = await reg.pushManager.getSubscription();
@@ -697,10 +741,10 @@ function usePushSubscription(userId?: string) {
       }
       setPushEnabled(false); toast("Browser notifications disabled");
     } catch (err) {
-      console.error("disable push error", err);
+      console.warn("disable push error", err);
       toast("Failed to disable notifications");
     }
-  }, []);
+  }, [pushEnabledViaEnv]);
 
   return { pushEnabled, checkingPush, enable, disable };
 }
@@ -740,9 +784,46 @@ const ProfilePage: React.FC = () => {
       setLoading(true); setError(null);
       try {
         const res = await api.get<User>("/users/profile", { signal: ctrl.signal });
-        if (res.data) {
-          setUser(res.data); setDraft(res.data);
-          try { localStorage.setItem("user", JSON.stringify(res.data)); } catch {}
+
+        // --- START: Rescue/merge phone & address from localStorage (temporary client-side fix) ---
+        // If server omitted phone/address, attempt to fill them from localStorage or common alternate keys.
+        let serverUser: any = res.data ?? {};
+        try {
+          const saved = localStorage.getItem("user");
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            // phone fallbacks
+            if (!serverUser.phone && parsed.phone) serverUser.phone = parsed.phone;
+            if (!serverUser.phone && parsed.mobile) serverUser.phone = parsed.mobile;
+            if (!serverUser.phone && parsed.phoneNumber) serverUser.phone = parsed.phoneNumber;
+            if (!serverUser.phone && parsed.contact?.phone) serverUser.phone = parsed.contact.phone;
+
+            // address fallbacks (either an object or flattened fields)
+            if (!serverUser.address && parsed.address) {
+              serverUser.address = parsed.address;
+            } else if (!serverUser.address) {
+              // build address from common flattened keys if they exist
+              const anyAddrPresent = parsed.addressLine1 || parsed.addressLine2 || parsed.city || parsed.postalCode || parsed.country || parsed.state;
+              if (anyAddrPresent) {
+                serverUser.address = {
+                  line1: parsed.addressLine1 ?? parsed.address?.line1,
+                  line2: parsed.addressLine2 ?? parsed.address?.line2,
+                  city: parsed.city ?? parsed.address?.city,
+                  state: parsed.state ?? parsed.address?.state,
+                  postalCode: parsed.postalCode ?? parsed.address?.postalCode,
+                  country: parsed.country ?? parsed.address?.country,
+                };
+              }
+            }
+          }
+        } catch (e) {
+          // ignore parse errors
+        }
+        // --- END: Rescue/merge ---
+
+        if (serverUser) {
+          setUser(serverUser); setDraft(serverUser);
+          try { localStorage.setItem("user", JSON.stringify(serverUser)); } catch {}
         }
       } catch (err) {
         const anyErr = err as any;
@@ -958,15 +1039,18 @@ const ProfilePage: React.FC = () => {
                             </div>
                             <input className="pp-input" placeholder="Country" value={draft?.address?.country ?? ""} onChange={e => patchAddress({ country: e.target.value })} />
                           </div>
-                        ) : (user.address?.line1 || user.address?.city) ? (
-                          <address className="pp-address">
-                            {user.address.line1 && <div>{user.address.line1}</div>}
-                            {user.address.line2 && <div>{user.address.line2}</div>}
-                            <div>{[user.address.city, user.address.state].filter(Boolean).join(", ")}</div>
-                            <div>{[user.address.postalCode, user.address.country].filter(Boolean).join(" ")}</div>
-                          </address>
                         ) : (
-                          <p className="pp-empty">No address on file.</p>
+                          // Show address if any address field has a non-empty value
+                          (user.address && Object.values(user.address).some(v => v != null && String(v).trim() !== "")) ? (
+                            <address className="pp-address">
+                              {user.address.line1 && <div>{user.address.line1}</div>}
+                              {user.address.line2 && <div>{user.address.line2}</div>}
+                              <div>{[user.address.city, user.address.state].filter(Boolean).join(", ")}</div>
+                              <div>{[user.address.postalCode, user.address.country].filter(Boolean).join(" ")}</div>
+                            </address>
+                          ) : (
+                            <p className="pp-empty">No address on file.</p>
+                          )
                         )}
                       </section>
 
